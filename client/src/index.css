@@ -1,0 +1,412 @@
+/* FONTS - MUST BE ABOVE TAILWIND */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
+/* TAILWIND IMPORTS */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* BASE STYLES */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+  width: 100%;
+}
+
+
+/* ============================================ */
+/* ============================================ */
+/* THEME 1: LAVENDER LIGHT (Soft Lavender + White) */
+/* ============================================ */
+.theme-lavender {
+  /* Primary Colors */
+  --color-primary: #B19CD9;
+  --color-primary-dark: #967AC3;
+  --color-secondary: #E6E6FA;
+  --color-accent: #FFB7B2;
+  
+  /* Backgrounds */
+  --color-background: #FDFBFF;
+  --color-surface: #F8F5FC;
+  --color-card: #FFFFFF;
+  
+  /* Text */
+  --color-text: #4A4059;
+  --color-text-light: #8E849E;
+  
+  /* Borders */
+  --color-border: #EFE6FD;
+  
+  /* Status Colors */
+  --color-success: #98D8AA;
+  --color-error: #FF9B9B;
+  --color-warning: #FFD966;
+  --color-info: #A0C4FF;
+  
+  /* Typography */
+  --font-heading: 'Plus Jakarta Sans', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  
+  /* Spacing */
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
+  
+  /* Shadows */
+  --shadow-sm: 0 2px 8px rgba(177, 156, 217, 0.1);
+  --shadow-md: 0 4px 12px rgba(177, 156, 217, 0.15);
+  --shadow-lg: 0 8px 24px rgba(177, 156, 217, 0.2);
+  --shadow-xl: 0 16px 32px rgba(177, 156, 217, 0.25);
+}
+
+/* ============================================ */
+/* THEME 2: SOFT & FRIENDLY (Terracotta + Soft Green) - DEFAULT */
+/* ============================================ */
+.theme-friendly {
+  /* Primary Colors - Warm Terracotta + Soft Green */
+  --color-primary: #D4745C;
+  --color-primary-dark: #C0624A;
+  --color-secondary: #7C9885;
+  --color-accent: #F4A261;
+  
+  /* Backgrounds - Warm Cream Tones */
+  --color-background: #FFF9F5;
+  --color-surface: #FFF4EE;
+  --color-card: #FFFFFF;
+  
+  /* Text - Warm Browns */
+  --color-text: #5A4A42;
+  --color-text-light: #9B8B82;
+  
+  /* Borders - Soft Peach */
+  --color-border: #F5E6E0;
+  
+  /* Status Colors */
+  --color-success: #7C9885;
+  --color-error: #E76F51;
+  --color-warning: #F4A261;
+  --color-info: #8AADB8;
+  
+  /* Typography - Rounded, Friendly */
+  --font-heading: 'Plus Jakarta Sans', 'DM Sans', -apple-system, sans-serif;
+  --font-body: 'DM Sans', -apple-system, sans-serif;
+  
+  /* Spacing - More Rounded */
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
+  
+  /* Shadows - Soft, Warm */
+  --shadow-sm: 0 2px 8px rgba(212, 116, 92, 0.08);
+  --shadow-md: 0 4px 12px rgba(212, 116, 92, 0.12);
+  --shadow-lg: 0 8px 24px rgba(212, 116, 92, 0.15);
+  --shadow-xl: 0 16px 32px rgba(212, 116, 92, 0.18);
+}
+
+/* ============================================ */
+/* THEME 3: BOLD MODERN (Vibrant Purple/Pink) */
+/* ============================================ */
+.theme-bold {
+  /* Primary Colors - Bold & Vibrant */
+  --color-primary: #6C5CE7;
+  --color-primary-dark: #5849C7;
+  --color-secondary: #FF6B9D;
+  --color-accent: #FFA502;
+  
+  /* Backgrounds - Cool Grays */
+  --color-background: #F8F9FA;
+  --color-surface: #F1F3F5;
+  --color-card: #FFFFFF;
+  
+  /* Text - Deep Blue-Black */
+  --color-text: #0A0E27;
+  --color-text-light: #6C757D;
+  
+  /* Borders - Cool Gray */
+  --color-border: #DEE2E6;
+  
+  /* Status Colors */
+  --color-success: #00D9A3;
+  --color-error: #FF3838;
+  --color-warning: #FFA502;
+  --color-info: #4D9FFF;
+  
+  /* Typography - Bold, Geometric */
+  --font-heading: 'Poppins', 'Manrope', sans-serif;
+  --font-body: 'Manrope', sans-serif;
+  
+  /* Spacing - Sharp */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  
+  /* Shadows - Colored */
+  --shadow-sm: 0 2px 8px rgba(108, 92, 231, 0.1);
+  --shadow-md: 0 4px 16px rgba(108, 92, 231, 0.15);
+  --shadow-lg: 0 8px 24px rgba(108, 92, 231, 0.2);
+  --shadow-xl: 0 16px 40px rgba(108, 92, 231, 0.25);
+}
+
+/* ============================================ */
+/* THEME 4: GLASSMORPHISM (Gradient + Frosted Glass) */
+/* ============================================ */
+/* ============================================ */
+/* THEME 4: ROYAL LAVENDER (Deep Purple + Gold Accents) */
+/* ============================================ */
+.theme-royal {
+  /* Primary Colors - Rich & Regal */
+  --color-primary: #6A4C93;
+  --color-primary-dark: #553C7B;
+  --color-secondary: #B590E8;
+  --color-accent: #FFD700;
+  
+  /* Backgrounds - Slightly darker, premium feel */
+  --color-background: #F4F1FA;
+  --color-surface: #EBE5F5;
+  --color-card: #FFFFFF;
+  
+  /* Text */
+  --color-text: #2D2438;
+  --color-text-light: #6D6478;
+  
+  /* Borders */
+  --color-border: #DBCDEE;
+  
+  /* Status Colors */
+  --color-success: #06D6A0;
+  --color-error: #EF476F;
+  --color-warning: #FFD166;
+  --color-info: #118AB2;
+  
+  /* Typography */
+  --font-heading: 'Poppins', sans-serif;
+  --font-body: 'Manrope', sans-serif;
+  
+  /* Spacing */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  
+  /* Shadows - Sharp & Defined */
+  --shadow-sm: 0 2px 4px rgba(106, 76, 147, 0.05);
+  --shadow-md: 0 6px 12px rgba(106, 76, 147, 0.1);
+  --shadow-lg: 0 12px 24px rgba(106, 76, 147, 0.15);
+  --shadow-xl: 0 20px 40px rgba(106, 76, 147, 0.2);
+}
+
+/* ============================================ */
+/* APPLY THEME VARIABLES TO BODY */
+/* ============================================ */
+body {
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  line-height: 1.6;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--color-text);
+}
+
+/* ============================================ */
+/* GLASSMORPHISM SPECIFIC STYLES */
+/* ============================================ */
+.theme-glass {
+  background: linear-gradient(135deg, #667EEA 0%, #764BA2 100%);
+  min-height: 100vh;
+}
+
+.theme-glass .glass-card {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+}
+
+.theme-glass .glass-nav {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* ============================================ */
+/* SMOOTH THEME TRANSITIONS */
+/* ============================================ */
+* {
+  transition: background-color 0.3s ease, 
+              color 0.3s ease, 
+              border-color 0.3s ease,
+              box-shadow 0.3s ease;
+}
+
+/* Disable transitions for theme switching */
+.theme-switching * {
+  transition: none !important;
+}
+
+/* ============================================ */
+/* THEME-SPECIFIC ANIMATION TIMING */
+/* ============================================ */
+/* ============================================ */
+/* THEME-SPECIFIC ANIMATION TIMING */
+/* ============================================ */
+.theme-friendly * {
+  transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.theme-bold * {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 0.2s;
+}
+
+.theme-lavender * {
+  transition-timing-function: ease-in-out;
+}
+
+.theme-royal * {
+  transition-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* ============================================ */
+/* SCROLLBAR STYLING */
+/* ============================================ */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-surface);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-primary);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary-dark);
+}
+
+/* ============================================ */
+/* SELECTION STYLING */
+/* ============================================ */
+::selection {
+  background: var(--color-primary);
+  color: white;
+}
+
+::-moz-selection {
+  background: var(--color-primary);
+  color: white;
+}
+
+/* ============================================ */
+/* FOCUS STYLES */
+/* ============================================ */
+*:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ============================================ */
+/* UTILITY CLASSES */
+/* ============================================ */
+.bg-gradient-primary {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+}
+
+.bg-gradient-secondary {
+  background: linear-gradient(135deg, var(--color-secondary) 0%, var(--color-accent) 100%);
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ============================================ */
+/* ANIMATION KEYFRAMES */
+/* ============================================ */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+/* ============================================ */
+/* RESPONSIVE BREAKPOINTS */
+/* ============================================ */
+@media (max-width: 640px) {
+  :root {
+    --radius-sm: 10px;
+    --radius-md: 14px;
+    --radius-lg: 18px;
+    --radius-xl: 22px;
+  }
+}
+
+/* ============================================ */
+/* PRINT STYLES */
+/* ============================================ */
+@media print {
+  * {
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+  }
+}
