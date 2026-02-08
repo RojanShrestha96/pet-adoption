@@ -99,3 +99,31 @@ export const createNotification = async (recipientId, recipientType, type, title
     // Don't crash the app if notification fails
   }
 };
+
+// HELPER: Notify all admins
+export const notifyAllAdmins = async (type, title, message, relatedLink = null) => {
+  try {
+    // Dynamically import Admin model to avoid circular dependencies
+    const { default: Admin } = await import('../models/Admin.js');
+    
+    // Get all active admins
+    const admins = await Admin.find({ isActive: true });
+    
+    // Create notification for each admin
+    const notificationPromises = admins.map(admin =>
+      Notification.create({
+        recipient: admin._id,
+        recipientType: 'admin',
+        type,
+        title,
+        message,
+        relatedLink
+      })
+    );
+    
+    await Promise.all(notificationPromises);
+  } catch (error) {
+    console.error('Notify all admins error:', error);
+    // Don't crash the app if notification fails
+  }
+};

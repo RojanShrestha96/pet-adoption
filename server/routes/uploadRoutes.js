@@ -4,10 +4,31 @@ import { uploadImages, uploadDocuments, uploadPetFiles, getFileUrl } from '../mi
 
 const router = express.Router();
 
+// Log all requests to upload routes BEFORE any middleware
+router.use((req, res, next) => {
+  console.log(`\n=== UPLOAD REQUEST ===`);
+  console.log(`Method: ${req.method}`);
+  console.log(`Path: ${req.path}`);
+  console.log(`Content-Type: ${req.headers['content-type']}`);
+  next();
+});
+
 // Upload multiple images
-router.post('/images', verifyToken, requireShelter, uploadImages.array('images', 5), (req, res) => {
+router.post('/images', verifyToken, requireShelter, (req, res, next) => {
+  uploadImages.array('images', 5)(req, res, (err) => {
+    if (err) {
+       console.error('Multer Error in route wrapper:', err);
+       return next(err);
+    }
+    next();
+  });
+}, (req, res) => {
   try {
+    console.log('Upload images request received');
+    console.log('Files received:', req.files ? req.files.length : 0);
+    
     if (!req.files || req.files.length === 0) {
+      console.log('No files found in req.files');
       return res.status(400).json({ message: 'No images uploaded' });
     }
 
@@ -25,7 +46,7 @@ router.post('/images', verifyToken, requireShelter, uploadImages.array('images',
 });
 
 // Upload multiple documents (PDFs, etc.)
-router.post('/documents', verifyToken, requireShelter, uploadDocuments.array('documents', 10), (req, res) => {
+router.post('/documents', verifyToken, uploadDocuments.array('documents', 10), (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ message: 'No documents uploaded' });

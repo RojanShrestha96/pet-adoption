@@ -8,7 +8,7 @@ const notificationSchema = new mongoose.Schema({
   },
   recipientType: {
     type: String,
-    enum: ['adopter', 'shelter'],
+    enum: ['adopter', 'shelter', 'admin'],
     default: 'adopter'
   },
   type: {

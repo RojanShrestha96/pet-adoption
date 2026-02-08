@@ -22,7 +22,7 @@ const userSchema = new mongoose.Schema(
     adoptedPets: [{ type: mongoose.Schema.Types.ObjectId, ref: "Pet" }],
     favoritePets: [{ type: mongoose.Schema.Types.ObjectId, ref: "Pet" }],
     applicationsSent: [
-      { type: mongoose.Schema.Types.ObjectId, ref: "Application" },
+      { type: mongoose.Schema.Types.ObjectId, ref: "AdoptionApplication" },
     ],
   },
   { timestamps: true }

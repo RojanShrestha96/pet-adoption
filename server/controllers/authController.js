@@ -244,8 +244,8 @@ export const loginUser = async (req, res) => {
         email: user.email,
         name: user.name,
         phone: user.phone,
-        bio: user.bio || '',
-        address: user.address || '',
+        bio: user.bio || "",
+        address: user.address || "",
         type: userType,
       },
     });
@@ -324,19 +324,23 @@ export const forgotPassword = async (req, res) => {
       return res.status(400).json({ message: "Email is required" });
     }
 
+    // Normalize email for case-insensitive search
+    const normalizedEmail = email.trim().toLowerCase();
+
     // Find user in either User or Shelter collection
-    let user = await User.findOne({ email });
+    let user = await User.findOne({ email: normalizedEmail });
     let userType = "adopter";
 
     if (!user) {
-      user = await Shelter.findOne({ email });
+      user = await Shelter.findOne({ email: normalizedEmail });
       userType = "shelter";
     }
 
     if (!user) {
-      // Don't reveal if email exists (security best practice)
-      return res.status(200).json({
-        message: "If the email exists, a reset link has been sent",
+      // Email doesn't exist - return 404 to prevent processing
+      return res.status(404).json({
+        message: "Email not found in our system",
+        found: false,
       });
     }
 
@@ -354,7 +358,7 @@ export const forgotPassword = async (req, res) => {
 
     // Send reset link via email
     const resetLink = `${process.env.CLIENT_URL}/reset-password?token=${resetToken}&email=${email}`;
-    
+
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: email,
@@ -410,11 +414,14 @@ export const forgotPassword = async (req, res) => {
     await transporter.sendMail(mailOptions);
 
     return res.status(200).json({
-      message: "If the email exists, a reset link has been sent",
+      message: "Password reset link has been sent to your email",
+      found: true,
     });
   } catch (error) {
     console.error("Forgot password error:", error);
-    return res.status(500).json({ message: "Server error during password reset" });
+    return res
+      .status(500)
+      .json({ message: "Server error during password reset" });
   }
 };
 
@@ -424,12 +431,16 @@ export const resetPassword = async (req, res) => {
     const { token, email, newPassword } = req.body;
 
     if (!token || !email || !newPassword) {
-      return res.status(400).json({ message: "Token, email, and new password are required" });
+      return res
+        .status(400)
+        .json({ message: "Token, email, and new password are required" });
     }
 
     // Validate password strength
     if (newPassword.length < 8) {
-      return res.status(400).json({ message: "Password must be at least 8 characters" });
+      return res
+        .status(400)
+        .json({ message: "Password must be at least 8 characters" });
     }
 
     // Verify token
@@ -437,7 +448,9 @@ export const resetPassword = async (req, res) => {
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET);
     } catch (err) {
-      return res.status(400).json({ message: "Invalid or expired reset token" });
+      return res
+        .status(400)
+        .json({ message: "Invalid or expired reset token" });
     }
 
     // Find user
@@ -473,7 +486,9 @@ export const resetPassword = async (req, res) => {
     });
   } catch (error) {
     console.error("Reset password error:", error);
-    return res.status(500).json({ message: "Server error during password reset" });
+    return res
+      .status(500)
+      .json({ message: "Server error during password reset" });
   }
 };
 
@@ -510,14 +525,16 @@ export const updateProfile = async (req, res) => {
         email: user.email,
         name: user.name,
         phone: user.phone,
-        bio: user.bio || '',
-        address: user.address || '',
+        bio: user.bio || "",
+        address: user.address || "",
         type: userType,
       },
     });
   } catch (error) {
     console.error("Update profile error:", error);
-    return res.status(500).json({ message: "Server error during profile update" });
+    return res
+      .status(500)
+      .json({ message: "Server error during profile update" });
   }
 };
 
@@ -529,11 +546,15 @@ export const changePassword = async (req, res) => {
     const userType = req.user.type;
 
     if (!currentPassword || !newPassword) {
-      return res.status(400).json({ message: "Current and new passwords are required" });
+      return res
+        .status(400)
+        .json({ message: "Current and new passwords are required" });
     }
 
     if (newPassword.length < 8) {
-      return res.status(400).json({ message: "New password must be at least 8 characters" });
+      return res
+        .status(400)
+        .json({ message: "New password must be at least 8 characters" });
     }
 
     let user;
@@ -561,10 +582,11 @@ export const changePassword = async (req, res) => {
     return res.status(200).json({ message: "Password changed successfully" });
   } catch (error) {
     console.error("Change password error:", error);
-    return res.status(500).json({ message: "Server error during password change" });
+    return res
+      .status(500)
+      .json({ message: "Server error during password change" });
   }
 };
-
 
 // GET PROFILE (Populated with favorites)
 export const getProfile = async (req, res) => {
@@ -573,22 +595,22 @@ export const getProfile = async (req, res) => {
     const userType = req.user.type;
 
     let user;
-    if (userType === 'adopter') {
+    if (userType === "adopter") {
       user = await User.findById(userId)
-        .populate('favoritePets')
-        .populate('adoptedPets')
-        .populate('applicationsSent');
+        .populate("favoritePets")
+        .populate("adoptedPets")
+        .populate("applicationsSent");
     } else {
       user = await Shelter.findById(userId);
     }
 
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ message: "User not found" });
     }
 
     // Convert to plain object to modify if needed
     const userData = user.toObject();
-    
+
     // Ensure favoritePets is always an array
     if (!userData.favoritePets) {
       userData.favoritePets = [];
@@ -606,12 +628,12 @@ export const getProfile = async (req, res) => {
         profileImage: user.profileImage,
         favoritePets: userData.favoritePets,
         adoptedPets: userData.adoptedPets,
-        applicationsSent: userData.applicationsSent
-      }
+        applicationsSent: userData.applicationsSent,
+      },
     });
   } catch (error) {
-    console.error('Get profile error:', error);
-    return res.status(500).json({ message: 'Server error fetching profile' });
+    console.error("Get profile error:", error);
+    return res.status(500).json({ message: "Server error fetching profile" });
   }
 };
 
@@ -620,40 +642,44 @@ export const toggleFavorite = async (req, res) => {
   try {
     const userId = req.user.userId;
     const { petId } = req.params;
-    
+
     // Only adopters can have favorites for now
-    if (req.user.type !== 'adopter') {
-      return res.status(403).json({ message: 'Only adopters can save favorites' });
+    if (req.user.type !== "adopter") {
+      return res
+        .status(403)
+        .json({ message: "Only adopters can save favorites" });
     }
 
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ message: "User not found" });
     }
 
     // Check if pet is already favorited
     const isFavorited = user.favoritePets.includes(petId);
-    
+
     if (isFavorited) {
       // Remove from favorites
-      user.favoritePets = user.favoritePets.filter(id => id.toString() !== petId);
+      user.favoritePets = user.favoritePets.filter(
+        (id) => id.toString() !== petId
+      );
     } else {
       // Add to favorites
       user.favoritePets.push(petId);
     }
 
     await user.save();
-    
+
     // Return updated list populated
-    await user.populate('favoritePets');
+    await user.populate("favoritePets");
 
     return res.status(200).json({
-      message: isFavorited ? 'Removed from favorites' : 'Added to favorites',
+      message: isFavorited ? "Removed from favorites" : "Added to favorites",
       isFavorited: !isFavorited,
-      favoritePets: user.favoritePets
+      favoritePets: user.favoritePets,
     });
   } catch (error) {
-    console.error('Toggle favorite error:', error);
-    return res.status(500).json({ message: 'Server error toggling favorite' });
+    console.error("Toggle favorite error:", error);
+    return res.status(500).json({ message: "Server error toggling favorite" });
   }
 };

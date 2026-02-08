@@ -18,6 +18,8 @@ const shelterSchema = new mongoose.Schema(
     isEmailVerified: { type: Boolean, default: false },
     emailOTP: { type: String },
     emailOTPExpires: { type: Date },
+    resetToken: { type: String },
+    resetTokenExpires: { type: Date },
     isVerified: { type: Boolean, default: false },
     totalPets: { type: Number, default: 0 },
     adoptionsSheltered: { type: Number, default: 0 },

@@ -9,6 +9,7 @@ interface User {
   bio?: string;
   address?: string;
   type: "adopter" | "shelter" | "admin";
+  role?: "super_admin" | "admin" | "moderator";
   theme?: string;
   favoritePets?: any[]; // Using any[] for now to avoid circular dependency
   adoptedPets?: any[];

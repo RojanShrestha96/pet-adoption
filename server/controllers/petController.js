@@ -1,4 +1,6 @@
 import Pet from "../models/Pet.js";
+import Notification from "../models/Notification.js";
+import { notifyAllAdmins } from "./notificationController.js";
 
 // Create a new pet (Shelter only)
 export const createPet = async (req, res) => {
@@ -39,7 +41,7 @@ export const createPet = async (req, res) => {
       breed,
       age,
       gender,
-      size,
+      size: size || undefined,
       weight,
       description,
       images: images || [],
@@ -69,6 +71,28 @@ export const createPet = async (req, res) => {
     });
 
     await pet.save();
+
+    // Populate shelter info for notification
+    await pet.populate('shelter', 'name');
+    const shelterName = pet.shelter?.name || 'A shelter';
+
+    // Create notification for the shelter
+    await Notification.create({
+      recipient: shelterId,
+      recipientType: 'shelter',
+      type: 'pet',
+      title: 'Pet Submitted for Review',
+      message: `Your pet "${pet.name}" has been successfully submitted and is pending admin review.`,
+      relatedLink: `/shelter/manage-pets`
+    });
+
+    // Notify all admins about new pet submission
+    await notifyAllAdmins(
+      'pet',
+      'New Pet Submitted',
+      `${shelterName} has submitted a new pet "${pet.name}" (${species}) for review.`,
+      `/admin/shelters/${shelterId}`
+    );
 
     res.status(201).json({
       message: "Pet submitted for review successfully",
@@ -142,9 +166,18 @@ export const updatePet = async (req, res) => {
       return res.status(404).json({ message: "Pet not found or unauthorized" });
     }
 
+    // Store previous status to determine if this is an edit
+    const wasApproved = pet.reviewStatus === 'approved';
+
     // Update fields
     const updateFields = req.body;
     Object.keys(updateFields).forEach(key => {
+      // Handle empty strings for optional enum fields like size
+      if (key === 'size' && updateFields[key] === "") {
+        pet[key] = undefined;
+        return;
+      }
+
       if (key === 'medical' || key === 'compatibility') {
         pet[key] = { ...pet[key], ...updateFields[key] };
       } else {
@@ -152,15 +185,36 @@ export const updatePet = async (req, res) => {
       }
     });
 
-    // If pet was rejected and is being resubmitted, reset review status
-    if (pet.reviewStatus === 'rejected') {
-      pet.reviewStatus = 'pending';
-      pet.adoptionStatus = 'pending-review';
-    }
+    // ALWAYS reset pet to pending review on any edit (requires admin re-approval)
+    pet.reviewStatus = 'pending';
+    pet.adoptionStatus = 'pending-review';
 
     await pet.save();
 
-    res.json({ message: "Pet updated successfully", pet });
+    // Populate shelter info for notifications
+    await pet.populate('shelter', 'name');
+    const shelterName = pet.shelter?.name || 'A shelter';
+
+    // Notify shelter about edit submission
+    await Notification.create({
+      recipient: shelterId,
+      recipientType: 'shelter',
+      type: 'info',
+      title: 'Pet Edit Submitted',
+      message: `Your changes to "${pet.name}" have been submitted and are pending admin re-approval.`,
+      relatedLink: `/shelter/manage-pets`
+    });
+
+    // Notify all admins about pet edit
+    const editType = wasApproved ? 'edited an approved' : 'updated a';
+    await notifyAllAdmins(
+      'pet',
+      'Pet Updated - Review Required',
+      `${shelterName} has ${editType} pet "${pet.name}" (${pet.species}). Please review the changes.`,
+      `/admin/shelters/${shelterId}`
+    );
+
+    res.json({ message: "Pet updated successfully and submitted for re-approval", pet });
   } catch (error) {
     console.error("Error updating pet:", error);
     res.status(500).json({ message: "Failed to update pet" });
@@ -189,12 +243,16 @@ export const deletePet = async (req, res) => {
 // Get all approved pets (Public - for adopters)
 export const getApprovedPets = async (req, res) => {
   try {
-    const { species, status, search, page = 1, limit = 12 } = req.query;
+    const { species, status, search, shelter, page = 1, limit = 12 } = req.query;
 
     const query = { 
       reviewStatus: 'approved',
       adoptionStatus: { $in: ['available', 'pending'] }
     };
+
+    if (shelter) {
+      query.shelter = shelter;
+    }
 
     if (species && species !== 'all') {
       if (species === 'other') {
@@ -279,6 +337,22 @@ export const reviewPet = async (req, res) => {
     pet.reviewedAt = new Date();
 
     await pet.save();
+
+    // Notify the shelter
+    const notificationMessage = action === 'approve'
+        ? `Great news! Your pet "${pet.name}" has been approved and is now listed as available.`
+        : `Update Required: Your pet "${pet.name}" was not approved. Reason: ${notes || 'No reason provided.'}`;
+
+    const notificationType = action === 'approve' ? 'success' : 'warning';
+
+    await Notification.create({
+        recipient: pet.shelter,
+        recipientType: 'shelter',
+        type: notificationType,
+        title: action === 'approve' ? 'Pet Approved' : 'Pet Needs Attention',
+        message: notificationMessage,
+        relatedLink: `/shelter/manage-pets`
+    });
 
     res.json({ 
       message: `Pet ${action}d successfully`, 
