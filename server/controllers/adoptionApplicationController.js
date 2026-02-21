@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import AdoptionApplication from "../models/AdoptionApplication.js";
 import Pet from "../models/Pet.js";
 import Notification from "../models/Notification.js";
@@ -211,7 +212,7 @@ export const getApplicationById = async (req, res) => {
       _id: id,
       shelter: shelterId
     })
-      .populate('pet', 'name species breed age gender images')
+      .populate('pet', 'name species breed age gender images size')
       .populate('adopter', 'name email')
       .populate('shelter', 'name email phone location');
 
@@ -312,6 +313,46 @@ export const updateApplicationStatus = async (req, res) => {
       if (pet) {
         pet.adoptionStatus = 'adopted';
         await pet.save();
+
+        // REJECT ALL OTHER APPLICANTS FOR THIS PET
+        const otherApplications = await AdoptionApplication.find({
+          pet: application.pet,
+          _id: { $ne: application._id }, // Exclude current application
+          status: { $nin: ['completed', 'rejected'] } // Only active applications
+        }).populate('adopter', 'name email');
+
+        if (otherApplications.length > 0) {
+          // Bulk update status to rejected
+          await AdoptionApplication.updateMany(
+            {
+              pet: application.pet,
+              _id: { $ne: application._id },
+              status: { $nin: ['completed', 'rejected'] }
+            },
+            {
+              $set: {
+                status: 'rejected',
+                rejectionReason: 'This pet has been adopted by another applicant.',
+                reviewedBy: shelterId,
+                reviewedAt: new Date()
+              }
+            }
+          );
+
+          // Notify each rejected applicant
+          const notificationPromises = otherApplications.map(app => 
+            Notification.create({
+              recipient: app.adopter._id,
+              recipientType: 'adopter',
+              type: 'warning',
+              title: 'Application Update',
+              message: `The pet ${pet.name} has been adopted by another family. We know this is disappointing, but there are many other pets waiting for a home.`,
+              relatedLink: `/application-tracking/${app._id}`
+            })
+          );
+
+          await Promise.all(notificationPromises);
+        }
       }
     }
 
@@ -427,8 +468,11 @@ export const getShelterApplicationStats = async (req, res) => {
   try {
     const shelterId = req.user.userId;
 
+    // Cast to ObjectId — aggregation $match does NOT auto-cast string IDs unlike find()
+    const shelterObjectId = new mongoose.Types.ObjectId(shelterId);
+
     const stats = await AdoptionApplication.aggregate([
-      { $match: { shelter: shelterId } },
+      { $match: { shelter: shelterObjectId } },
       {
         $group: {
           _id: '$status',
@@ -443,6 +487,11 @@ export const getShelterApplicationStats = async (req, res) => {
       reviewing: 0,
       scheduled: 0,
       approved: 0,
+      availability_submitted: 0,
+      meeting_scheduled: 0,
+      meeting_completed: 0,
+      follow_up_required: 0,
+      follow_up_scheduled: 0,
       rejected: 0,
       completed: 0
     };
@@ -485,7 +534,10 @@ export const getAdopterApplicationById = async (req, res) => {
       });
     }
 
-    res.json(application);
+    // Use model method to filter internal data (backend security)
+    const safeData = application.getAdopterView();
+    
+    res.json(safeData);
 
   } catch (error) {
     res.status(500).json({

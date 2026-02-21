@@ -59,10 +59,10 @@ export const submitAvailability = async (req, res) => {
       });
     }
 
-    // Verify application is in approved status
-    if (application.status !== 'approved') {
+    // Verify application is in approved or follow_up_required status
+    if (!['approved', 'follow_up_required'].includes(application.status)) {
       return res.status(400).json({
-        message: `Cannot submit availability. Application status is ${application.status}. Must be approved.`
+        message: `Cannot submit availability. Application status is ${application.status}. Must be approved or follow_up_required.`
       });
     }
 
@@ -243,19 +243,53 @@ export const scheduleMeetAndGreet = async (req, res) => {
 
 /**
  * Complete meet & greet (Shelter only)
- * Status transition: meeting_scheduled → meeting_completed
+ * Status transition: meeting_scheduled → meeting_completed / follow_up_required / rejected
  */
 export const completeMeetAndGreet = async (req, res) => {
   try {
     const { id } = req.params;
     const shelterId = req.user.userId;
-    const { outcome, notes } = req.body;
+    const { outcome, internalNotes, rejectionReason, customReason, followUpDate, followUpNotes } = req.body;
 
     // Validate outcome
     if (!outcome || !['successful', 'needs_followup', 'not_a_match'].includes(outcome)) {
       return res.status(400).json({
         message: "outcome is required and must be 'successful', 'needs_followup', or 'not_a_match'"
       });
+    }
+
+    // Validate rejection reason for "not_a_match"
+    if (outcome === 'not_a_match') {
+      if (!rejectionReason) {
+        return res.status(400).json({
+          message: "rejectionReason is required when outcome is 'not_a_match'"
+        });
+      }
+      
+      const validReasons = [
+        'home_not_suitable', 'energy_mismatch', 'behavioral_concerns',
+        'expectations_mismatch', 'compatibility_issue', 'adopter_withdrew', 'other'
+      ];
+      
+      if (!validReasons.includes(rejectionReason)) {
+        return res.status(400).json({ message: "Invalid rejection reason" });
+      }
+      
+      // If 'other', require custom reason
+      if (rejectionReason === 'other' && !customReason?.trim()) {
+        return res.status(400).json({
+          message: "customReason is required when rejectionReason is 'other'"
+        });
+      }
+    }
+
+    // Validate follow-up date for "needs_followup"
+    if (outcome === 'needs_followup') {
+      if (!followUpDate) {
+        return res.status(400).json({
+          message: "followUpDate is required when outcome is 'needs_followup'"
+        });
+      }
     }
 
     // Find application
@@ -273,10 +307,21 @@ export const completeMeetAndGreet = async (req, res) => {
     }
 
     // Verify status
-    if (application.status !== 'meeting_scheduled') {
+    if (application.status !== 'meeting_scheduled' && application.status !== 'follow_up_scheduled') {
       return res.status(400).json({
         message: `Cannot complete meeting. Current status is ${application.status}.`
       });
+    }
+
+    // Enforce max 2 follow-ups
+    if (outcome === 'needs_followup') {
+      const followUpCount = application.meetAndGreet?.followUpCount || 0;
+      
+      if (followUpCount >= 2) {
+        return res.status(400).json({
+          message: "Maximum follow-ups reached (2). You must select 'Successful Match' or 'Not a Match'."
+        });
+      }
     }
 
     // Update application
@@ -284,19 +329,52 @@ export const completeMeetAndGreet = async (req, res) => {
     application.meetAndGreet.outcome = outcome;
     application.meetAndGreet.completedAt = new Date();
     
-    if (notes) {
-      if (application.meetAndGreet.shelterNotes) {
-        application.meetAndGreet.shelterNotes += `\n\nOutcome notes: ${notes}`;
-      } else {
-        application.meetAndGreet.shelterNotes = notes;
-      }
+    // Store internal notes (never shown to adopter)
+    if (internalNotes?.trim()) {
+      const notePrefix = application.meetAndGreet.shelterNotes ? '\n\n' : '';
+      application.meetAndGreet.shelterNotes = 
+        (application.meetAndGreet.shelterNotes || '') + `${notePrefix}Internal Meeting Notes (${new Date().toLocaleDateString()}): ${internalNotes}`;
     }
-
-    application.status = 'meeting_completed';
+    
+    // Handle outcome-specific logic
+    switch (outcome) {
+      case 'not_a_match':
+        // Store structured rejection details (internal only)
+        application.meetAndGreet.rejectionDetails = {
+          reason: rejectionReason,
+          customReason: rejectionReason === 'other' ? customReason : undefined,
+          internalNotes: internalNotes || undefined
+        };
+        application.status = 'rejected';
+        
+        // Reopen pet for other adopters
+        await Pet.findByIdAndUpdate(application.pet._id, {
+          adoptionStatus: 'available'
+        });
+        break;
+        
+      case 'needs_followup':
+        // Increment follow-up counter
+        application.meetAndGreet.followUpCount = (application.meetAndGreet.followUpCount || 0) + 1;
+        
+        application.meetAndGreet.followUpDetails = {
+          requiredByDate: new Date(followUpDate),
+          notes: followUpNotes || '',
+          secondMeetingScheduled: false
+        };
+        application.status = 'follow_up_required';
+        // Pet stays RESERVED (pending) - NOT reopened
+        break;
+        
+      case 'successful':
+        application.status = 'meeting_completed';
+        // Pet remains in 'pending' status until final adoption
+        break;
+    }
 
     await application.save();
 
-    // Notify adopter based on outcome
+    // Notify adopter based on outcome (professional, non-revealing messages)
     let notificationTitle = '';
     let notificationMessage = '';
     let notificationType = 'info';
@@ -308,13 +386,14 @@ export const completeMeetAndGreet = async (req, res) => {
         notificationType = 'success';
         break;
       case 'needs_followup':
-        notificationTitle = 'Follow-up Required';
-        notificationMessage = `Thank you for meeting ${application.pet.name}. The shelter would like to schedule a follow-up discussion.`;
+        notificationTitle = 'Follow-up Meeting Needed';
+        notificationMessage = `Thank you for meeting ${application.pet.name}. The shelter would like to schedule a follow-up discussion. Please submit your availability for a second meeting.`;
         notificationType = 'info';
         break;
       case 'not_a_match':
-        notificationTitle = 'Thank You for Visiting';
-        notificationMessage = `Thank you for taking the time to meet ${application.pet.name}. While this wasn't the perfect match, we appreciate your interest in adoption.`;
+        // Generic professional message - NO internal reasoning exposed
+        notificationTitle = 'Thank You for Your Interest';
+        notificationMessage = `After careful consideration, we feel this pet may not be the best match for your current situation. We encourage you to explore other available pets.`;
         notificationType = 'info';
         break;
     }

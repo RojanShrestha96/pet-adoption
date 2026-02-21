@@ -167,6 +167,8 @@ const adoptionApplicationSchema = new mongoose.Schema({
       'availability_submitted',
       'meeting_scheduled',
       'meeting_completed',
+      'follow_up_required',
+      'follow_up_scheduled',
       'rejected',
       'completed'
     ],
@@ -223,6 +225,39 @@ const adoptionApplicationSchema = new mongoose.Schema({
       enum: ['successful', 'needs_followup', 'not_a_match']
     },
     
+    // Structured rejection details (internal only)
+    rejectionDetails: {
+      reason: {
+        type: String,
+        enum: [
+          'home_not_suitable',
+          'energy_mismatch',
+          'behavioral_concerns',
+          'expectations_mismatch',
+          'compatibility_issue',
+          'adopter_withdrew',
+          'other'
+        ]
+      },
+      customReason: String, // Required when reason is 'other'
+      internalNotes: String // Internal observations, NEVER shown to adopter
+    },
+    
+    // Follow-up meeting tracking
+    followUpDetails: {
+      requiredByDate: Date,
+      notes: String,
+      secondMeetingScheduled: Boolean
+    },
+    
+    // Follow-up counter (max 2 follow-ups allowed)
+    followUpCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 2
+    },
+    
     // When the meeting was completed
     completedAt: Date,
     
@@ -232,6 +267,7 @@ const adoptionApplicationSchema = new mongoose.Schema({
     // When shelter confirmed the schedule
     scheduledAt: Date
   },
+
   
   // Legacy scheduling fields (kept for backward compatibility)
   scheduledDate: Date,
@@ -285,6 +321,21 @@ adoptionApplicationSchema.methods.updateStatus = function(newStatus, reviewerId)
   }
   
   return this.save();
+};
+
+// Filter out internal data for adopter view (backend security)
+adoptionApplicationSchema.methods.getAdopterView = function() {
+  const obj = this.toObject();
+  
+  // Remove all internal/sensitive fields
+  if (obj.meetAndGreet) {
+    delete obj.meetAndGreet.shelterNotes; // Internal shelter notes
+    delete obj.meetAndGreet.rejectionDetails; // Structured rejection data
+  }
+  delete obj.notes; // Internal shelter notes
+  delete obj.reviewedBy; // Staff metadata
+  
+  return obj;
 };
 
 const AdoptionApplication = mongoose.model("AdoptionApplication", adoptionApplicationSchema);

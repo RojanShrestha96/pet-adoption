@@ -1,5 +1,6 @@
 import Pet from "../models/Pet.js";
 import Notification from "../models/Notification.js";
+import AdoptionApplication from "../models/AdoptionApplication.js";
 import { notifyAllAdmins } from "./notificationController.js";
 
 // Create a new pet (Shelter only)
@@ -231,6 +232,44 @@ export const deletePet = async (req, res) => {
 
     if (!pet) {
       return res.status(404).json({ message: "Pet not found or unauthorized" });
+    }
+
+    // Find and reject all pending/reviewing applications for this pet
+    const activeApplications = await AdoptionApplication.find({
+      pet: id,
+      status: { $in: ['pending', 'reviewing', 'meeting_scheduled', 'follow_up_required', 'follow_up_scheduled'] }
+    }).populate('adopter', 'name email');
+
+    if (activeApplications.length > 0) {
+      // Reject all active applications
+      await AdoptionApplication.updateMany(
+        { 
+          pet: id,
+          status: { $in: ['pending', 'reviewing', 'meeting_scheduled', 'follow_up_required', 'follow_up_scheduled'] }
+        },
+        {
+          $set: {
+            status: 'rejected',
+            rejectionReason: 'The pet profile was removed by the shelter.',
+            reviewedBy: shelterId,
+            reviewedAt: new Date()
+          }
+        }
+      );
+
+      // Notify all applicants
+      const notificationPromises = activeApplications.map(app => 
+        Notification.create({
+          recipient: app.adopter._id,
+          recipientType: 'adopter',
+          type: 'warning',
+          title: 'Application Closed',
+          message: `The profile for ${pet.name} has been removed by the shelter. Your application has been automatically closed.`,
+          relatedLink: `/application-tracking/${app._id}`
+        })
+      );
+
+      await Promise.all(notificationPromises);
     }
 
     res.json({ message: "Pet deleted successfully" });
