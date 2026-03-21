@@ -16,9 +16,13 @@ import api from "../../utils/api";
 const statusConfig: Record<string, { label: string; variant: "success" | "warning" | "info" | "neutral" | "error" }> = {
   pending: { label: "Pending", variant: "warning" },
   reviewing: { label: "In Review", variant: "info" },
-  scheduled: { label: "Interview Scheduled", variant: "info" },
   approved: { label: "Approved", variant: "success" },
-  rejected: { label: "Not Selected", variant: "neutral" },
+  availability_submitted: { label: "Availability Submitted", variant: "info" },
+  meeting_scheduled: { label: "Meeting Scheduled", variant: "info" },
+  meeting_completed: { label: "Meeting Complete", variant: "success" },
+  follow_up_required: { label: "Follow-Up Required", variant: "warning" },
+  follow_up_scheduled: { label: "Follow-Up Scheduled", variant: "info" },
+  rejected: { label: "Not Selected", variant: "error" },
   completed: { label: "Adopted", variant: "success" },
 };
 

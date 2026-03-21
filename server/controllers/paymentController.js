@@ -1,6 +1,9 @@
 
 import crypto from "crypto";
 import Donation from "../models/Donation.js";
+import Pet from "../models/Pet.js";
+import Shelter from "../models/Shelter.js";
+import Notification from "../models/Notification.js";
 
 // For sandbox, these values are standard. In production, these should come from .env
 const ESEWA_PRODUCT_CODE = process.env.ESEWA_PRODUCT_CODE || "EPAYTEST";
@@ -9,10 +12,21 @@ const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 
 export const initiatePayment = async (req, res) => {
   try {
-    const { amount, productId, donorName, donorEmail, message } = req.body;
+    const { amount, petId, donorName, donorEmail, message, userId } = req.body;
 
     if (!amount) {
       return res.status(400).json({ success: false, message: "Amount is required" });
+    }
+
+    // Derive shelterId from petId
+    let shelterId = null;
+    let petData = null;
+
+    if (petId) {
+      petData = await Pet.findById(petId).populate("shelter", "name");
+      if (petData && petData.shelter) {
+        shelterId = petData.shelter._id;
+      }
     }
 
     // Prepare eSewa form data
@@ -24,9 +38,11 @@ export const initiatePayment = async (req, res) => {
     const totalAmount = amount + taxAmount + productServiceCharge + productDeliveryCharge;
 
     // Create Donation Record with 'pending' status
-    // This allows us to track payment attempts and verify them later
-    // Only donations with 'completed' status will be shown in the system
     const newDonation = new Donation({
+      type: petId ? "pet" : "general",
+      petId: petId || null,
+      shelterId: shelterId || null,
+      userId: userId || null,
       amount,
       donorName: donorName || "Anonymous",
       donorEmail,
@@ -90,7 +106,9 @@ export const verifyPayment = async (req, res) => {
     const { transaction_uuid, total_amount, status } = decodedData;
 
     // Find donation by transactionUuid
-    const donation = await Donation.findOne({ transactionUuid: transaction_uuid });
+    const donation = await Donation.findOne({ transactionUuid: transaction_uuid })
+      .populate("petId", "name donationStory images")
+      .populate("shelterId", "name");
 
     if (!donation) {
         return res.status(404).json({ success: false, message: "Donation not found" });
@@ -98,7 +116,6 @@ export const verifyPayment = async (req, res) => {
 
     // Check if payment was completed
     if (status !== "COMPLETE") {
-        // Mark donation as failed
         donation.status = "failed";
         await donation.save();
         return res.status(400).json({ success: false, message: "Payment not complete" });
@@ -110,7 +127,6 @@ export const verifyPayment = async (req, res) => {
            expected: donation.amount, 
            received: total_amount 
          });
-         // Mark as failed due to amount mismatch
          donation.status = "failed";
          await donation.save();
          return res.status(400).json({ 
@@ -123,7 +139,54 @@ export const verifyPayment = async (req, res) => {
     donation.status = "completed";
     await donation.save();
 
-    res.status(200).json({ success: true, message: "Payment verified successfully", donation });
+    // Create a Notification if this donation was linked to a user
+    if (donation.userId) {
+      try {
+        const petName = donation.petId?.name || null;
+        await Notification.create({
+          recipient: donation.userId,
+          recipientType: "adopter",
+          type: "success",
+          title: "Donation Successful! 💛",
+          message: petName
+            ? `You just helped ${petName} get the care they need! Your Rs ${donation.amount} donation has been received. Thank you for your kindness.`
+            : `Thank you! Your Rs ${donation.amount} donation has been received and will help pets in need.`,
+          relatedLink: "/profile"
+        });
+        console.log(`[Notification] Donation success notification sent to user ${donation.userId}`);
+      } catch (err) {
+        console.error("Failed to create donation notification:", err);
+      }
+    } else {
+      console.log("[Notification] No userId on donation — skipping notification.");
+    }
+
+    // Increment pet donation count
+    if (donation.petId) {
+      await Pet.findByIdAndUpdate(donation.petId._id || donation.petId, {
+        $inc: { donationCount: 1 }
+      });
+    }
+
+    // Increment shelter funds
+    if (donation.shelterId) {
+      await Shelter.findByIdAndUpdate(donation.shelterId._id || donation.shelterId, {
+        $inc: { 
+          totalFundsAllocated: donation.amount,
+          pendingPayout: donation.amount
+        }
+      });
+    }
+
+
+
+    res.status(200).json({ 
+      success: true, 
+      message: "Payment verified successfully", 
+      donation,
+      pet: donation.petId,
+      shelter: donation.shelterId
+    });
 
   } catch (error) {
     console.error("Payment verification error:", error);

@@ -64,6 +64,13 @@ interface Application {
     };
     location?: string;
     outcome?: string;
+    followUpCount: number;
+  };
+  followUpCount?: number;
+  followUpDetails?: {
+    requiredByDate?: string;
+    notes?: string;
+    secondMeetingScheduled?: boolean;
   };
   createdAt: string;
 }
@@ -78,6 +85,8 @@ export function ApplicationTrackingPage() {
   const [error, setError] = useState<string | null>(null);
   const [showAvailabilityForm, setShowAvailabilityForm] = useState(false);
   const [submittingAvailability, setSubmittingAvailability] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     const fetchApplication = async () => {
@@ -110,17 +119,23 @@ export function ApplicationTrackingPage() {
   }, [applicationId, navigate]);
 
   // Map backend status to frontend timeline status
-  const getTimelineStatus = (status: string): ApplicationStatus => {
+  const getTimelineStatus = (status: string, followUpCount: number = 0): ApplicationStatus => {
     switch (status) {
       case 'pending': return 'submitted';
       case 'reviewing': return 'under-review';
       case 'availability_submitted':
       case 'meeting_scheduled':
+        // If followUpCount > 0, it means we are in the follow-up loop
+        return followUpCount > 0 ? 'follow-up' : 'meet-greet';
       case 'meeting_completed':
-        return 'meet-greet';
+        // If followUpCount > 0, we are at follow-up complete stage
+        return followUpCount > 0 ? 'follow-up-completed' : 'meet-greet';
+      case 'follow_up_required':
+      case 'follow_up_scheduled':
+        return 'follow-up';
       case 'approved': return 'approved';
       case 'completed': return 'adopted';
-      case 'rejected': return 'submitted';
+      case 'rejected': return 'closed'; // Show as final "closed" state
       default: return 'submitted';
     }
   };
@@ -140,6 +155,10 @@ export function ApplicationTrackingPage() {
         return `You're all set! Get ready to meet ${petName} in person.`;
       case 'meeting_completed':
         return 'Thank you for visiting! The shelter will contact you about the next steps.';
+      case 'follow_up_required':
+        return `The shelter would like to schedule a follow-up discussion regarding your application for ${petName}.`;
+      case 'follow_up_scheduled':
+        return `A follow-up meeting has been scheduled for your application with ${petName}.`;
       case 'completed':
         return `Congratulations on adopting ${petName}! 🎉`;
       case 'rejected':
@@ -208,6 +227,26 @@ export function ApplicationTrackingPage() {
     }
   };
 
+  // Handle cancel / withdraw application
+  const handleCancelApplication = async () => {
+    try {
+      setCancelling(true);
+      const token = localStorage.getItem("token");
+      await axios.delete(
+        `http://localhost:5000/api/applications/${application?._id}/cancel`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      showToast("Your application has been withdrawn.", "success");
+      setShowCancelModal(false);
+      navigate("/");
+    } catch (err: any) {
+      console.error("Error cancelling application:", err);
+      showToast(err.response?.data?.message || "Failed to cancel application", "error");
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--color-background)]">
@@ -230,7 +269,9 @@ export function ApplicationTrackingPage() {
   }
 
   const pet = application.pet;
-  const currentStatus = getTimelineStatus(application.status);
+  const petName = pet?.name || "the pet";
+  const followUpCount = application.meetAndGreet?.followUpCount || application.followUpCount || 0;
+  const currentStatus = getTimelineStatus(application.status, followUpCount);
 
   return (
     <div
@@ -290,7 +331,13 @@ export function ApplicationTrackingPage() {
               >
                 Application Status
               </h2>
-              <ApplicationTimeline currentStatus={currentStatus} />
+              <ApplicationTimeline 
+                currentStatus={currentStatus}
+                hasFollowUp={followUpCount > 0}
+                meetingOutcome={application.meetAndGreet?.outcome as 'successful' | 'needs_followup' | 'not_a_match' | undefined}
+                isRejected={application.status === 'rejected'}
+                actualStatus={application.status}
+              />
               
               {/* Contextual status message */}
               {application.status !== 'completed' && application.status !== 'rejected' && (
@@ -300,15 +347,15 @@ export function ApplicationTrackingPage() {
                   className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200"
                 >
                   <p className="text-sm text-blue-900">
-                    {getStatusMessage(application.status, pet.name)}
+                    {getStatusMessage(application.status, petName)}
                   </p>
                 </motion.div>
               )}
             </Card>
 
             {/* Meet & Greet Section - Status-based Display */}
-            {/* Status: approved - Show availability submission */}
-            {application.status === 'approved' && !showAvailabilityForm && (
+            {/* Status: approved OR follow_up_required - Show availability submission */}
+            {['approved', 'follow_up_required'].includes(application.status) && !showAvailabilityForm && (
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
                 <Card padding="lg" className="mt-6">
                   <div className="flex items-center gap-3 mb-4">
@@ -316,14 +363,23 @@ export function ApplicationTrackingPage() {
                       <CheckCircle className="w-6 h-6 text-green-600" />
                     </div>
                     <div>
-                    <h3 className="text-xl font-bold text-gray-900">🎉 Great News! Let's Schedule a Meet & Greet</h3>
-                    <p className="text-sm text-gray-600">The shelter would like to meet you and {pet.name}</p>
+                    <h3 className="text-xl font-bold text-gray-900">
+                      {application.status === 'approved' 
+                        ? "🎉 Great News! Let's Schedule a Meet & Greet" 
+                        : "📅 Schedule Follow-Up Meeting"}
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      {application.status === 'approved'
+                        ? `The shelter would like to meet you and ${petName}`
+                        : "The shelter would like to schedule a second meeting"}
+                    </p>
                   </div>
                   </div>
                   <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg mb-4">
                   <p className="text-sm text-blue-900">
-                    The shelter has reviewed your application and would like to schedule a meet & greet with {pet.name}! 
-                    Please share 2-3 time slots when you're available. They'll confirm one of these times within 2-3 business days.
+                    {application.status === 'approved'
+                      ? `The shelter has reviewed your application and would like to schedule a meet & greet with ${petName}! Please share 2-3 time slots when you're available.`
+                      : "To proceed with your application, the shelter requests a follow-up meeting. Please submit your availability for another visit."}
                   </p>
                 </div>
                   <Button
@@ -338,7 +394,7 @@ export function ApplicationTrackingPage() {
             )}
 
             {/* Show availability submission form */}
-            {showAvailabilityForm && application.status === 'approved' && (
+            {showAvailabilityForm && ['approved', 'follow_up_required'].includes(application.status) && (
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mt-6">
                 <AvailabilitySubmission
                   onSubmit={handleAvailabilitySubmit}
@@ -357,13 +413,17 @@ export function ApplicationTrackingPage() {
                       <Clock className="w-6 h-6 text-amber-600" />
                     </div>
                     <div>
-                      <h3 className="text-xl font-bold text-gray-900">Availability Submitted</h3>
+                      <h3 className="text-xl font-bold text-gray-900">
+                        {followUpCount > 0 ? "Follow-Up Availability Submitted" : "Availability Submitted"}
+                      </h3>
                       <p className="text-sm text-gray-600">Waiting for shelter confirmation</p>
                     </div>
                   </div>
                   
                   <div className="space-y-3 mb-4">
-                    <h4 className="font-semibold text-gray-700">Your Proposed Times:</h4>
+                    <h4 className="font-semibold text-gray-700">
+                      {followUpCount > 0 ? "Your Proposed Follow-Up Times:" : "Your Proposed Times:"}
+                    </h4>
                     {application.meetAndGreet?.availabilitySlots?.map((slot, index) => {
                       const timeSlotDisplay = {
                         morning: '9:00 AM - 12:00 PM',
@@ -397,6 +457,33 @@ export function ApplicationTrackingPage() {
               </motion.div>
             )}
 
+
+
+            {/* Status: follow_up_scheduled - Show schedule */}
+            {application.status === 'follow_up_scheduled' && (
+               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+                 <Card padding="lg" className="mt-6">
+                   <div className="flex items-center gap-3 mb-4">
+                     <div className="p-3 bg-purple-100 rounded-xl">
+                       <Calendar className="w-6 h-6 text-purple-600" />
+                     </div>
+                     <div>
+                       <h3 className="text-xl font-bold text-gray-900">Follow-Up Scheduled</h3>
+                       <p className="text-sm text-gray-600">Upcoming discussion</p>
+                     </div>
+                   </div>
+
+                   {application.followUpDetails?.secondMeetingScheduled && (
+                     <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                       <p className="text-sm text-purple-900">
+                         A follow-up meeting has been confirmed. Please check your email for details.
+                       </p>
+                     </div>
+                   )}
+                 </Card>
+               </motion.div>
+            )}
+
             {/* Status: meeting_scheduled - Show confirmed meeting details */}
             {application.status === 'meeting_scheduled' && (
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
@@ -406,7 +493,9 @@ export function ApplicationTrackingPage() {
                       <Calendar className="w-6 h-6 text-green-600" />
                     </div>
                     <div>
-                      <h3 className="text-xl font-bold text-gray-900">Meet & Greet Scheduled!</h3>
+                      <h3 className="text-xl font-bold text-gray-900">
+                        {followUpCount > 0 ? "Follow-Up Meeting Scheduled!" : "Meet & Greet Scheduled!"}
+                      </h3>
                       <p className="text-sm text-gray-600">See you soon!</p>
                     </div>
                   </div>
@@ -496,7 +585,9 @@ export function ApplicationTrackingPage() {
                       <CheckCircle className="w-6 h-6 text-purple-600" />
                     </div>
                     <div>
-                      <h3 className="text-xl font-bold text-gray-900">Meet & Greet Completed</h3>
+                      <h3 className="text-xl font-bold text-gray-900">
+                        {followUpCount > 0 ? "Follow-Up Completed" : "Meet & Greet Completed"}
+                      </h3>
                       <p className="text-sm text-gray-600">Thank you for visiting!</p>
                     </div>
                   </div>
@@ -508,7 +599,9 @@ export function ApplicationTrackingPage() {
                       'bg-gray-50 border-gray-200'
                     }`}>
                       <p className="text-sm font-medium">
-                        {application.meetAndGreet.outcome === 'successful' && 
+                        {application.meetAndGreet.outcome === 'successful' && followUpCount > 0 &&
+                          'Great news! The follow-up went well. The shelter will contact you soon about finalizing the adoption.'}
+                        {application.meetAndGreet.outcome === 'successful' && followUpCount === 0 &&
                           'Great news! The meet & greet went well. The shelter will contact you soon about next steps.'}
                         {application.meetAndGreet.outcome === 'needs_followup' && 
                           'The shelter would like to schedule a follow-up discussion. They will contact you soon.'}
@@ -581,6 +674,8 @@ export function ApplicationTrackingPage() {
                 </div>
               </Card>
 
+              {/* Cancel Request Card – hidden for terminal statuses */}
+              {!['completed', 'rejected', 'cancelled'].includes(application.status) && (
               <Card padding="md">
                 <div className="flex items-center justify-between">
                   <div>
@@ -604,6 +699,7 @@ export function ApplicationTrackingPage() {
                   <Button
                     variant="outline"
                     icon={<XCircle className="w-4 h-4" />}
+                    onClick={() => setShowCancelModal(true)}
                     style={{
                       borderColor: "var(--color-error)",
                       color: "var(--color-error)",
@@ -613,11 +709,13 @@ export function ApplicationTrackingPage() {
                   </Button>
                 </div>
               </Card>
+              )}
             </div>
           </div>
 
           {/* Pet Info Sidebar */}
           <div>
+            {pet ? (
             <Card padding="lg">
               <h3
                 className="font-semibold mb-4"
@@ -628,8 +726,8 @@ export function ApplicationTrackingPage() {
                 Pet Details
               </h3>
               <img
-                src={pet.images[0]}
-                alt={pet.name}
+                src={pet.images && pet.images.length > 0 ? pet.images[0] : "/placeholder-pet.png"}
+                alt={pet.name || "Pet"}
                 className="w-full h-48 object-cover rounded-xl mb-4"
               />
               <h4
@@ -669,6 +767,14 @@ export function ApplicationTrackingPage() {
                 )}
               </div>
             </Card>
+            ) : (
+              <Card padding="lg" className="mb-4 bg-gray-50 border-gray-200">
+                <div className="flex flex-col items-center justify-center py-6 text-center">
+                  <AlertCircle className="w-12 h-12 text-gray-300 mb-2" />
+                  <p className="text-gray-500 font-medium">Pet profile no longer available</p>
+                </div>
+              </Card>
+            )}
 
             <Card padding="lg" className="mt-4">
               <h3
@@ -712,6 +818,73 @@ export function ApplicationTrackingPage() {
           </div>
         </div>
       </div>
+
+      {/* Cancel Confirmation Modal */}
+      {showCancelModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.55)" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowCancelModal(false); }}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.92 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.92 }}
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"
+          >
+            {/* Icon */}
+            <div className="flex justify-center mb-4">
+              <div className="p-4 bg-red-100 rounded-full">
+                <XCircle className="w-10 h-10 text-red-500" />
+              </div>
+            </div>
+
+            {/* Title */}
+            <h2 className="text-2xl font-bold text-center text-gray-900 mb-2">
+              Withdraw Application?
+            </h2>
+
+            {/* Pet name hint */}
+            <p className="text-center text-gray-500 mb-1 text-sm">
+              Application for
+            </p>
+            <p className="text-center font-semibold text-gray-800 text-lg mb-5">
+              {petName}
+            </p>
+
+            {/* Warning text */}
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+              <p className="text-sm text-red-800 leading-relaxed">
+                Are you sure you want to withdraw your adoption application? This action
+                <strong> cannot be undone</strong> and the shelter will be notified. If you
+                change your mind later, you will need to submit a new application.
+              </p>
+            </div>
+
+            {/* Buttons */}
+            <div className="flex gap-3">
+              <button
+                className="flex-1 py-3 rounded-xl border-2 border-gray-200 text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
+                onClick={() => setShowCancelModal(false)}
+                disabled={cancelling}
+              >
+                Keep Application
+              </button>
+              <button
+                className="flex-1 py-3 rounded-xl bg-red-500 text-white font-semibold hover:bg-red-600 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
+                onClick={handleCancelApplication}
+                disabled={cancelling}
+              >
+                {cancelling ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Withdrawing...</>
+                ) : (
+                  <><XCircle className="w-4 h-4" /> Yes, Withdraw</>  
+                )}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

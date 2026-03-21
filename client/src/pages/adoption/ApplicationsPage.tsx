@@ -73,7 +73,7 @@ interface ApplicationStats {
 const statusConfig: Record<
   string,
   {
-    variant: "success" | "warning" | "info" | "neutral";
+    variant: "success" | "warning" | "info" | "neutral" | "error";
     label: string;
     color: string;
     bgColor: string;
@@ -115,6 +115,18 @@ const statusConfig: Record<
     color: "text-indigo-600",
     bgColor: "bg-indigo-50",
   },
+  follow_up_required: {
+    variant: "warning",
+    label: "Follow-Up Required",
+    color: "text-orange-600",
+    bgColor: "bg-orange-50",
+  },
+  follow_up_scheduled: {
+    variant: "info",
+    label: "Follow-Up Scheduled",
+    color: "text-purple-600",
+    bgColor: "bg-purple-50",
+  },
   scheduled: {
     variant: "info",
     label: "Scheduled",
@@ -122,10 +134,10 @@ const statusConfig: Record<
     bgColor: "bg-purple-50",
   },
   rejected: {
-    variant: "neutral",
+    variant: "error",
     label: "Rejected",
-    color: "text-gray-600",
-    bgColor: "bg-gray-100",
+    color: "text-red-600",
+    bgColor: "bg-red-50",
   },
   completed: {
     variant: "success",
@@ -311,7 +323,7 @@ export function ApplicationsPage() {
                   Applications
                 </h1>
                 <p className="text-sm text-gray-500">
-                  {filteredApps.length} of {stats.total} applications
+                  {filteredApps.length} of {applications.length} applications
                 </p>
               </div>
             </div>

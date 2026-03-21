@@ -11,7 +11,11 @@ import {
   getProfile,
   toggleFavorite
 } from "../controllers/authController.js";
-import { verifyToken } from "../middleware/authMiddleware.js";
+import { verifyToken, requireAdopter } from "../middleware/authMiddleware.js";
+import {
+  getAdopterProfile,
+  upsertAdopterProfile,
+} from "../controllers/adopterProfileController.js";
 
 const router = express.Router();
 
@@ -38,5 +42,9 @@ router.post("/change-password", verifyToken, changePassword);
 // New endpoints for favorites system
 router.get("/profile", verifyToken, getProfile);
 router.put("/profile/favorites/:petId", verifyToken, toggleFavorite);
+
+// ── Adopter persistent profile (reusable adoption info) ──
+router.get("/adopter-profile", verifyToken, requireAdopter, getAdopterProfile);
+router.put("/adopter-profile", verifyToken, requireAdopter, upsertAdopterProfile);
 
 export default router;

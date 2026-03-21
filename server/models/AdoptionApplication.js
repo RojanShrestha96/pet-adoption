@@ -107,7 +107,7 @@ const adoptionApplicationSchema = new mongoose.Schema({
     rentOwn: {
       type: String,
       required: true,
-      enum: ['rent', 'own']
+      enum: ['rent', 'own', 'live with family']
     },
     landlordPermission: [String], // URLs if renting
     hasChildren: {
@@ -170,7 +170,8 @@ const adoptionApplicationSchema = new mongoose.Schema({
       'follow_up_required',
       'follow_up_scheduled',
       'rejected',
-      'completed'
+      'completed',
+      'cancelled'
     ],
     default: 'pending',
     index: true

@@ -8,8 +8,10 @@ import {
   getAdopterApplications,
   getShelterApplicationStats,
   getAdopterApplicationById,
-  updateDocumentStatus
+  updateDocumentStatus,
+  cancelApplication
 } from "../controllers/adoptionApplicationController.js";
+import { getCompatibilityScore } from "../controllers/compatibilityController.js";
 
 // Import meet & greet controllers
 import {
@@ -32,12 +34,18 @@ router.get("/adopter/my-applications", verifyToken, requireAdopter, getAdopterAp
 // Get single application detail (for adopter who created it)
 router.get("/adopter/:id", verifyToken, requireAdopter, getAdopterApplicationById);
 
+// Compatibility score for a pet (adopter only)
+router.get("/compatibility/:petId", verifyToken, requireAdopter, getCompatibilityScore);
+
 // ============ MEET & GREET - ADOPTER ROUTES ============
 // Submit availability for meet & greet
 router.post("/:id/availability", verifyToken, requireAdopter, submitAvailability);
 
 // Request reschedule
 router.put("/:id/reschedule-request", verifyToken, requireAdopter, requestReschedule);
+
+// Cancel / withdraw application
+router.delete("/:id/cancel", verifyToken, requireAdopter, cancelApplication);
 
 // ============ SHELTER ROUTES ============
 // Get all applications for shelter's pets

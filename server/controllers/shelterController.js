@@ -100,17 +100,24 @@ export const updateShelterProfile = async (req, res) => {
     if (req.body.documentation && req.body.documentation.length > 0) {
       const admins = await Admin.find({ role: { $in: ['admin', 'super_admin'] } });
       
-      const notifications = admins.map(admin => ({
+      const notificationDocs = admins.map(admin => ({
         recipient: admin._id,
-        recipientType: 'admin', // Assuming your Notification model supports 'admin' or purely uses ID
+        recipientType: 'admin',
         type: 'application',
         title: 'Documents Uploaded',
         message: `Shelter "${updatedShelter.name}" has uploaded verification documents.`,
         relatedLink: `/admin/shelters/${updatedShelter._id}`
       }));
 
-      if (notifications.length > 0) {
-        await Notification.insertMany(notifications);
+      if (notificationDocs.length > 0) {
+        const savedNotifs = await Notification.insertMany(notificationDocs);
+        // Emit real-time to each admin
+        const io = req.app.get('io');
+        if (io) {
+          savedNotifs.forEach(notif => {
+            io.to(`user_${notif.recipient}`).emit('new_notification', notif.toObject ? notif.toObject() : notif);
+          });
+        }
       }
     }
 

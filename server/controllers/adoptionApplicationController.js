@@ -4,6 +4,24 @@ import Pet from "../models/Pet.js";
 import Notification from "../models/Notification.js";
 
 /**
+ * Emit a new notification to a user's socket room immediately after DB write.
+ * @param {import('http').Server & { get: Function }} app - Express app (for io access)
+ * @param {string} recipientId - MongoDB ObjectId string of the recipient
+ * @param {object} notification - The saved Mongoose document
+ */
+function emitNotification(app, recipientId, notification) {
+  try {
+    const io = app.get('io');
+    if (io) {
+      io.to(`user_${recipientId}`).emit('new_notification', notification.toObject ? notification.toObject() : notification);
+    }
+  } catch (e) {
+    // Never crash the request if socket emit fails
+    console.warn('Socket emit failed for notification:', e.message);
+  }
+}
+
+/**
  * Create a new adoption application (Adopters only)
  */
 export const createApplication = async (req, res) => {
@@ -96,7 +114,7 @@ export const createApplication = async (req, res) => {
 
     // Create notification for shelter
     const shelterName = pet.shelter.name || 'A shelter';
-    await Notification.create({
+    const shelterNotif = await Notification.create({
       recipient: pet.shelter._id,
       recipientType: 'shelter',
       type: 'application',
@@ -104,9 +122,10 @@ export const createApplication = async (req, res) => {
       message: `${personalInfo.fullName} has submitted an adoption application for ${pet.name}.`,
       relatedLink: `/shelter/applications/${application._id}`
     });
+    emitNotification(req.app, pet.shelter._id.toString(), shelterNotif);
 
     // Create confirmation notification for adopter
-    await Notification.create({
+    const adopterNotif = await Notification.create({
       recipient: adopterId,
       recipientType: 'adopter',
       type: 'success',
@@ -114,6 +133,7 @@ export const createApplication = async (req, res) => {
       message: `Your adoption application for ${pet.name} has been submitted to ${shelterName}. The shelter will review your application and contact you soon.`,
       relatedLink: `/application-tracking/${application._id}`
     });
+    emitNotification(req.app, adopterId.toString(), adopterNotif);
 
     res.status(201).json({
       message: "Application submitted successfully",
@@ -339,17 +359,19 @@ export const updateApplicationStatus = async (req, res) => {
             }
           );
 
-          // Notify each rejected applicant
-          const notificationPromises = otherApplications.map(app => 
-            Notification.create({
-              recipient: app.adopter._id,
+          // Notify each rejected applicant and emit via socket
+          const notificationPromises = otherApplications.map(async (otherApp) => {
+            const notif = await Notification.create({
+              recipient: otherApp.adopter._id,
               recipientType: 'adopter',
               type: 'warning',
               title: 'Application Update',
               message: `The pet ${pet.name} has been adopted by another family. We know this is disappointing, but there are many other pets waiting for a home.`,
-              relatedLink: `/application-tracking/${app._id}`
-            })
-          );
+              relatedLink: `/application-tracking/${otherApp._id}`
+            });
+            emitNotification(req.app, otherApp.adopter._id.toString(), notif);
+            return notif;
+          });
 
           await Promise.all(notificationPromises);
         }
@@ -392,7 +414,7 @@ export const updateApplicationStatus = async (req, res) => {
     }
 
     if (notificationTitle) {
-      await Notification.create({
+      const statusNotif = await Notification.create({
         recipient: application.adopter._id,
         recipientType: 'adopter',
         type: notificationType,
@@ -400,6 +422,7 @@ export const updateApplicationStatus = async (req, res) => {
         message: notificationMessage,
         relatedLink: `/application-tracking/${application._id}`
       });
+      emitNotification(req.app, application.adopter._id.toString(), statusNotif);
     }
 
     res.json({
@@ -600,6 +623,67 @@ export const updateDocumentStatus = async (req, res) => {
     console.error("Error updating document status:", error);
     res.status(500).json({
       message: "Failed to update document status",
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Cancel/withdraw an application (Adopter only - must be the one who created it)
+ * Only allowed when status is pending or reviewing (not yet deep into the process).
+ */
+export const cancelApplication = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const adopterId = req.user.userId;
+
+    const application = await AdoptionApplication.findOne({
+      _id: id,
+      adopter: adopterId
+    })
+      .populate('pet', 'name')
+      .populate('shelter', 'name email');
+
+    if (!application) {
+      return res.status(404).json({
+        message: "Application not found or you do not have permission to cancel it"
+      });
+    }
+
+    // Prevent cancellation of already-closed applications
+    const nonCancellableStatuses = ['completed', 'rejected', 'cancelled'];
+    if (nonCancellableStatuses.includes(application.status)) {
+      return res.status(400).json({
+        message: `This application cannot be cancelled because it is already ${application.status}.`
+      });
+    }
+
+    // Update status to cancelled
+    application.status = 'cancelled';
+    await application.save();
+
+    const petName = application.pet?.name || 'the pet';
+
+    // Notify the shelter
+    const shelterNotif = await Notification.create({
+      recipient: application.shelter._id,
+      recipientType: 'shelter',
+      type: 'warning',
+      title: 'Application Withdrawn',
+      message: `An adopter has withdrawn their application for ${petName}.`,
+      relatedLink: `/shelter/applications/${application._id}`
+    });
+    emitNotification(req.app, application.shelter._id.toString(), shelterNotif);
+
+    res.json({
+      message: "Your application has been successfully withdrawn.",
+      applicationId: application._id
+    });
+
+  } catch (error) {
+    console.error("Error cancelling application:", error);
+    res.status(500).json({
+      message: "Failed to cancel application",
       error: error.message
     });
   }

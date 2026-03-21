@@ -2,6 +2,34 @@
 import mongoose from "mongoose";
 
 const donationSchema = new mongoose.Schema({
+  // Pet-first fields
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    default: null,
+  },
+  type: {
+    type: String,
+    enum: ["pet", "general"],
+    default: "pet",
+  },
+  petId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Pet",
+    default: null,
+  },
+  shelterId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Shelter",
+    default: null,
+  },
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    default: null,
+  },
+
+  // Payment fields
   amount: {
     type: Number,
     required: true,
@@ -35,5 +63,10 @@ const donationSchema = new mongoose.Schema({
     default: Date.now,
   },
 });
+
+donationSchema.index({ petId: 1 });
+donationSchema.index({ shelterId: 1 });
+donationSchema.index({ userId: 1 });
+donationSchema.index({ status: 1 });
 
 export default mongoose.model("Donation", donationSchema);

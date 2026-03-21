@@ -7,15 +7,19 @@ import {
     deleteAdmin,
     updateAdminProfile
 } from "../controllers/adminAuthController.js";
+import { verifyToken, requireAdmin, requireSuperAdmin } from "../middleware/authMiddleware.js";
 import { 
     getDashboardStats, 
     getAllShelters, 
     updateShelterStatus,
+    suspendShelter,
     getShelterDetails,
     getShelterPets,
+    getShelterAdminStats,
+    updateShelterAdminNotes,
+    getPendingPetsQueue,
     getAllDonations
 } from "../controllers/adminDashboardController.js";
-import { verifyToken, requireAdmin, requireSuperAdmin } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
@@ -42,8 +46,15 @@ router.get("/stats", getDashboardStats);
 router.get("/shelters", getAllShelters);
 router.get("/shelters/:id", getShelterDetails);
 router.get("/shelters/:id/pets", getShelterPets);
+router.get("/shelters/:id/stats", getShelterAdminStats);
 router.patch("/shelters/:id/status", updateShelterStatus);
-router.get("/donations", getAllDonations);
+router.patch("/shelters/:id/suspend", suspendShelter);
+router.put("/shelters/:id/notes", updateShelterAdminNotes);
 
+// MODERATION QUEUE
+router.get("/moderation/pets", getPendingPetsQueue);
+
+// DONATIONS
+router.get("/donations", getAllDonations);
 
 export default router;

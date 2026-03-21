@@ -94,7 +94,19 @@ const petSchema = new mongoose.Schema({
 
   // Stats
   views: { type: Number, default: 0 },
-  favorites: { type: Number, default: 0 }
+  favorites: { type: Number, default: 0 },
+
+  // Donation / Featured pet fields
+  donationStory: {
+    type: String,
+    trim: true,
+    maxlength: 200,
+    default: ""
+  },
+  isFeatured: { type: Boolean, default: false },
+  featuredUntil: { type: Date, default: null },
+  donationCount: { type: Number, default: 0 },
+  lastFeaturedAt: { type: Date, default: null }
 }, {
   timestamps: true
 });
@@ -103,6 +115,8 @@ const petSchema = new mongoose.Schema({
 petSchema.index({ shelter: 1, adoptionStatus: 1 });
 petSchema.index({ species: 1, adoptionStatus: 1 });
 petSchema.index({ reviewStatus: 1 });
+petSchema.index({ isFeatured: 1 });
+petSchema.index({ lastFeaturedAt: 1 });
 
 const Pet = mongoose.model("Pet", petSchema);
 
