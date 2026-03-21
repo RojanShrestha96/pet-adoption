@@ -13,9 +13,9 @@ import {
   Sparkles,
   ExternalLink,
   Clock,
+  Trash2,
 } from "lucide-react";
-import api from "../../utils/api";
-import { useAuth } from "../../contexts/AuthContext";
+import { useNotifications } from "../../contexts/NotificationContext";
 import { Link } from "react-router-dom";
 
 interface Notification {
@@ -37,10 +37,28 @@ interface Notification {
 
 export function NotificationCenter() {
   const [isOpen, setIsOpen] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const { token, user } = useAuth();
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const {
+    notifications,
+    unreadCount,
+    flashCount,
+    markRead,
+    markAllRead,
+    deleteNotif,
+  } = useNotifications();
+
+  // Animate bell when a new real-time notification arrives
+  const [bellPulse, setBellPulse] = useState(false);
+  const prevFlash = useRef(flashCount);
+  useEffect(() => {
+    if (flashCount > prevFlash.current) {
+      setBellPulse(true);
+      const t = setTimeout(() => setBellPulse(false), 700);
+      prevFlash.current = flashCount;
+      return () => clearTimeout(t);
+    }
+  }, [flashCount]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -56,48 +74,18 @@ export function NotificationCenter() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const fetchNotifications = async () => {
-    if (!token) return;
-    try {
-      const response = await api.get("/notifications");
-      setNotifications(response.data.notifications);
-      setUnreadCount(response.data.unreadCount);
-    } catch (error) {
-      console.error("Error fetching notifications:", error);
-    }
+  const handleMarkAllRead = async () => {
+    await markAllRead();
   };
 
-  // Poll for notifications every 60 seconds
-  useEffect(() => {
-    if (user) {
-      fetchNotifications();
-      const interval = setInterval(fetchNotifications, 60000);
-      return () => clearInterval(interval);
-    }
-  }, [user, token]);
-
-  const markAllRead = async () => {
-    try {
-      setNotifications(notifications.map((n) => ({ ...n, read: true })));
-      setUnreadCount(0);
-      await api.put("/notifications/read-all", {});
-    } catch (error) {
-      console.error("Error marking all read:", error);
-      fetchNotifications();
-    }
+  const handleMarkRead = async (id: string) => {
+    await markRead(id);
   };
 
-  const markRead = async (id: string, e: React.MouseEvent) => {
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    try {
-      setNotifications(
-        notifications.map((n) => (n._id === id ? { ...n, read: true } : n))
-      );
-      setUnreadCount((prev) => Math.max(0, prev - 1));
-      await api.put(`/notifications/${id}/read`, {});
-    } catch (error) {
-      console.error("Error marking read:", error);
-    }
+    e.preventDefault();
+    await deleteNotif(id);
   };
 
   // Enhanced icon configurations with gradients
@@ -165,13 +153,15 @@ export function NotificationCenter() {
 
   return (
     <div className="relative" ref={dropdownRef}>
-      {/* Bell Button with enhanced animation */}
+      {/* Bell Button */}
       <motion.button
         onClick={() => setIsOpen(!isOpen)}
         className="relative p-2.5 rounded-xl transition-all"
         style={{
           background: isOpen ? "var(--color-surface)" : "transparent",
         }}
+        animate={bellPulse ? { rotate: [0, -15, 15, -10, 10, 0] } : {}}
+        transition={{ duration: 0.5 }}
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         aria-label="Notifications"
@@ -253,7 +243,7 @@ export function NotificationCenter() {
               </div>
               {unreadCount > 0 && (
                 <motion.button
-                  onClick={markAllRead}
+                  onClick={handleMarkAllRead}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
@@ -305,12 +295,12 @@ export function NotificationCenter() {
                           }}
                           onClick={() => {
                             if (!notification.read)
-                              markRead(notification._id, {} as any);
+                              handleMarkRead(notification._id);
                             setIsOpen(false);
                           }}
                         >
                           <div className="flex gap-3.5">
-                            {/* Icon with gradient background */}
+                            {/* Icon */}
                             <div
                               className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-lg transition-transform group-hover:scale-105"
                               style={{
@@ -342,6 +332,14 @@ export function NotificationCenter() {
                                     }}
                                   />
                                 )}
+
+                                <button
+                                  onClick={(e) => handleDelete(notification._id, e)}
+                                  className="opacity-0 group-hover:opacity-100 p-1 rounded-full hover:bg-red-50 text-gray-400 hover:text-red-500 transition-all"
+                                  title="Delete notification"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
                               </div>
                               <p
                                 className="text-xs leading-relaxed line-clamp-2 mb-2"

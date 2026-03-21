@@ -130,12 +130,15 @@ export function EditPetPage() {
     const fetchPet = async () => {
       try {
         setIsLoading(true);
-        const response = await axios.get(`http://localhost:5000/api/pets/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        
+        const response = await axios.get(
+          `http://localhost:5000/api/pets/${id}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
+
         const pet = response.data;
-        
+
         // Populate form with existing data
         setFormData({
           name: pet.name || "",
@@ -149,13 +152,19 @@ export function EditPetPage() {
           images: [],
           existingImages: pet.images || [],
           isVaccinated: pet.medical?.isVaccinated || false,
-          vaccinationDate: pet.medical?.vaccinationDate ? pet.medical.vaccinationDate.split('T')[0] : "",
+          vaccinationDate: pet.medical?.vaccinationDate
+            ? pet.medical.vaccinationDate.split("T")[0]
+            : "",
           isMicrochipped: pet.medical?.isMicrochipped || false,
           microchipId: pet.medical?.microchipId || "",
           isNeutered: pet.medical?.isNeutered || false,
           isDewormed: pet.medical?.isDewormed || false,
-          dewormingDate: pet.medical?.dewormingDate ? pet.medical.dewormingDate.split('T')[0] : "",
-          lastVetCheckup: pet.medical?.lastVetCheckup ? pet.medical.lastVetCheckup.split('T')[0] : "",
+          dewormingDate: pet.medical?.dewormingDate
+            ? pet.medical.dewormingDate.split("T")[0]
+            : "",
+          lastVetCheckup: pet.medical?.lastVetCheckup
+            ? pet.medical.lastVetCheckup.split("T")[0]
+            : "",
           healthStatus: pet.medical?.healthStatus || "healthy",
           medicalNotes: pet.medical?.medicalNotes || "",
           otherConditions: pet.medical?.otherConditions || [],
@@ -284,7 +293,7 @@ export function EditPetPage() {
               Authorization: `Bearer ${token}`,
             },
             body: imageFormData,
-          }
+          },
         );
 
         if (!imageResponse.ok) {
@@ -310,7 +319,7 @@ export function EditPetPage() {
               Authorization: `Bearer ${token}`,
             },
             body: docFormData,
-          }
+          },
         );
 
         if (!docResponse.ok) {
@@ -363,19 +372,20 @@ export function EditPetPage() {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        }
+        },
       );
 
       showToast(
         "Pet updated successfully! ✓ It will be reviewed by admin before becoming visible.",
-        "success"
+        "success",
       );
       navigate("/shelter/manage-pets");
     } catch (error: any) {
       console.error("Error updating pet:", error);
       showToast(
-        error.response?.data?.message || "Failed to update pet. Please try again.",
-        "error"
+        error.response?.data?.message ||
+          "Failed to update pet. Please try again.",
+        "error",
       );
     } finally {
       setIsSubmitting(false);
@@ -443,7 +453,9 @@ export function EditPetPage() {
                   Changes Require Admin Re-approval
                 </h3>
                 <p className="text-xs text-amber-700 mt-1">
-                  After you submit your changes, this pet will be marked as "Pending Review" and won't be publicly visible until an admin re-approves it.
+                  After you submit your changes, this pet will be marked as
+                  "Pending Review" and won't be publicly visible until an admin
+                  re-approves it.
                 </p>
               </div>
             </div>
@@ -477,8 +489,8 @@ export function EditPetPage() {
                       step.id < currentStep
                         ? "bg-green-500 text-white"
                         : step.id === currentStep
-                        ? "bg-[var(--color-primary)] text-white ring-4 ring-[var(--color-primary)]/20"
-                        : "bg-gray-200 text-gray-500"
+                          ? "bg-[var(--color-primary)] text-white ring-4 ring-[var(--color-primary)]/20"
+                          : "bg-gray-200 text-gray-500"
                     }`}
                   >
                     {step.id < currentStep ? (
@@ -556,7 +568,8 @@ export function EditPetPage() {
                     )}
 
                     {/* New Images Upload */}
-                    {(formData.existingImages.length + formData.images.length) < 5 && (
+                    {formData.existingImages.length + formData.images.length <
+                      5 && (
                       <DragDropImageUpload
                         onUpload={(files) => handleInputChange("images", files)}
                         maxFiles={5 - formData.existingImages.length}
@@ -564,12 +577,13 @@ export function EditPetPage() {
                       />
                     )}
 
-                    {(formData.existingImages.length === 0 && formData.images.length === 0) && (
-                      <p className="text-sm text-amber-600 mt-4 flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4" />
-                        At least one photo is required
-                      </p>
-                    )}
+                    {formData.existingImages.length === 0 &&
+                      formData.images.length === 0 && (
+                        <p className="text-sm text-amber-600 mt-4 flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4" />
+                          At least one photo is required
+                        </p>
+                      )}
                   </Card>
                 </motion.div>
               )}
@@ -803,7 +817,7 @@ export function EditPetPage() {
                             onClick={() =>
                               handleInputChange(
                                 item.key as keyof FormData,
-                                !formData[item.key as keyof FormData]
+                                !formData[item.key as keyof FormData],
                               )
                             }
                             className={`p-4 rounded-xl border-2 transition-all ${
@@ -857,7 +871,7 @@ export function EditPetPage() {
                         onClick={() =>
                           handleInputChange(
                             "isVaccinated",
-                            !formData.isVaccinated
+                            !formData.isVaccinated,
                           )
                         }
                         className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
@@ -901,7 +915,7 @@ export function EditPetPage() {
                         onClick={() =>
                           handleInputChange(
                             "isMicrochipped",
-                            !formData.isMicrochipped
+                            !formData.isMicrochipped,
                           )
                         }
                         className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
@@ -971,9 +985,7 @@ export function EditPetPage() {
                             <p className="font-medium text-gray-900">
                               Spayed/Neutered
                             </p>
-                            <p className="text-xs text-gray-500">
-                              Sterilized
-                            </p>
+                            <p className="text-xs text-gray-500">Sterilized</p>
                           </div>
                           {formData.isNeutered && (
                             <CheckCircle2 className="w-5 h-5 text-green-500 ml-auto" />
@@ -1036,7 +1048,10 @@ export function EditPetPage() {
                             className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-[var(--color-primary)] focus:outline-none transition-colors"
                             value={formData.vaccinationDate}
                             onChange={(e) =>
-                              handleInputChange("vaccinationDate", e.target.value)
+                              handleInputChange(
+                                "vaccinationDate",
+                                e.target.value,
+                              )
                             }
                           />
                         </div>
@@ -1122,7 +1137,9 @@ export function EditPetPage() {
                           <button
                             key={condition}
                             type="button"
-                            onClick={() => handleOtherConditionToggle(condition)}
+                            onClick={() =>
+                              handleOtherConditionToggle(condition)
+                            }
                             className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
                               formData.otherConditions.includes(condition)
                                 ? "bg-amber-500 text-white"
@@ -1277,25 +1294,33 @@ export function EditPetPage() {
                     <div className="space-y-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <p className="text-sm font-medium text-gray-500">Name</p>
+                          <p className="text-sm font-medium text-gray-500">
+                            Name
+                          </p>
                           <p className="text-base font-semibold text-gray-900">
                             {formData.name}
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-500">Species</p>
+                          <p className="text-sm font-medium text-gray-500">
+                            Species
+                          </p>
                           <p className="text-base font-semibold text-gray-900 capitalize">
                             {formData.species}
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-500">Age</p>
+                          <p className="text-sm font-medium text-gray-500">
+                            Age
+                          </p>
                           <p className="text-base font-semibold text-gray-900">
                             {formData.age}
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-500">Gender</p>
+                          <p className="text-sm font-medium text-gray-500">
+                            Gender
+                          </p>
                           <p className="text-base font-semibold text-gray-900 capitalize">
                             {formData.gender}
                           </p>
@@ -1307,7 +1332,9 @@ export function EditPetPage() {
                           Total Images
                         </p>
                         <p className="text-base font-semibold text-gray-900">
-                          {formData.existingImages.length + formData.images.length} image(s)
+                          {formData.existingImages.length +
+                            formData.images.length}{" "}
+                          image(s)
                         </p>
                       </div>
 
