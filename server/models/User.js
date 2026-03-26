@@ -19,6 +19,12 @@ const userSchema = new mongoose.Schema(
       notifyAdoptions: { type: Boolean, default: true },
     },
     theme: { type: String, default: 'friendly' },
+    // Admin Control Fields
+    status: { type: String, enum: ['active', 'warned', 'suspended', 'banned'], default: 'active' },
+    statusReason: { type: String },
+    statusUpdatedAt: { type: Date },
+    statusUpdatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' },
+    
     adoptedPets: [{ type: mongoose.Schema.Types.ObjectId, ref: "Pet" }],
     favoritePets: [{ type: mongoose.Schema.Types.ObjectId, ref: "Pet" }],
     applicationsSent: [

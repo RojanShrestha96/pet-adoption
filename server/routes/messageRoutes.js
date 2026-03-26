@@ -6,7 +6,7 @@ import {
   sendMessage,
   deleteConversation
 } from "../controllers/messageController.js";
-import { verifyToken } from "../middleware/authMiddleware.js";
+import { verifyToken, requireActiveUser } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
@@ -14,10 +14,10 @@ const router = express.Router();
 
 router.use(verifyToken); // All routes require auth
 
-router.post("/", createOrGetConversation);
+router.post("/", requireActiveUser, createOrGetConversation);
 router.get("/conversations", getUserConversations);
 router.get("/:conversationId", getMessages);
-router.post("/send", sendMessage);
+router.post("/send", requireActiveUser, sendMessage);
 router.delete("/conversations/:conversationId", deleteConversation);
 
 export default router;

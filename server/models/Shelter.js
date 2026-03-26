@@ -27,8 +27,13 @@ const shelterSchema = new mongoose.Schema(
     verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' },
     totalPets: { type: Number, default: 0 },
     adoptionsSheltered: { type: Number, default: 0 },
+    
+    // Read-only tracking fields. Money flows directly to shelter via eSewa. PetMate does not hold funds.
     totalFundsAllocated: { type: Number, default: 0 },
+    totalDonationsThisMonth: { type: Number, default: 0 },
+    // @deprecated - kept for backward compatibility, use totalDonationsThisMonth instead.
     pendingPayout: { type: Number, default: 0 },
+    
     theme: { type: String, default: 'friendly' },
     establishedDate: { type: Date },
     operatingHours: {
@@ -40,10 +45,12 @@ const shelterSchema = new mongoose.Schema(
       friday: { open: { type: String }, close: { type: String }, closed: { type: Boolean, default: false } },
       saturday: { open: { type: String }, close: { type: String }, closed: { type: Boolean, default: false } }
     },
+    // GeoJSON Point — required for $geoNear / 2dsphere queries.
+    // coordinates order: [longitude, latitude] (GeoJSON standard)
     location: {
-      lat: { type: Number },
-      lng: { type: Number },
-      formattedAddress: { type: String }
+      type: { type: String, enum: ['Point'], default: 'Point' },
+      coordinates: { type: [Number], default: undefined }, // [lng, lat]
+      formattedAddress: { type: String, trim: true }
     },
     documentation: [{
       title: { type: String },
@@ -62,5 +69,8 @@ const shelterSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Required for $geoNear and $near geospatial queries
+shelterSchema.index({ location: '2dsphere' });
 
 export default mongoose.model("Shelter", shelterSchema);

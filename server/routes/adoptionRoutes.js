@@ -1,5 +1,5 @@
-﻿import express from "express";
-import { verifyToken, requireAdopter, requireShelter } from "../middleware/authMiddleware.js";
+import express from "express";
+import { verifyToken, requireAdopter, requireShelter, requireActiveUser } from "../middleware/authMiddleware.js";
 import {
   createApplication,
   getShelterApplications,
@@ -9,7 +9,8 @@ import {
   getShelterApplicationStats,
   getAdopterApplicationById,
   updateDocumentStatus,
-  cancelApplication
+  cancelApplication,
+  regenerateInsights
 } from "../controllers/adoptionApplicationController.js";
 import { getCompatibilityScore } from "../controllers/compatibilityController.js";
 
@@ -26,7 +27,7 @@ const router = express.Router();
 
 // ============ ADOPTER ROUTES ============
 // Submit new adoption application (requires adopter/user auth)
-router.post("/", verifyToken, requireAdopter, createApplication);
+router.post("/", verifyToken, requireAdopter, requireActiveUser, createApplication);
 
 // Get adopter's own applications
 router.get("/adopter/my-applications", verifyToken, requireAdopter, getAdopterApplications);
@@ -39,10 +40,10 @@ router.get("/compatibility/:petId", verifyToken, requireAdopter, getCompatibilit
 
 // ============ MEET & GREET - ADOPTER ROUTES ============
 // Submit availability for meet & greet
-router.post("/:id/availability", verifyToken, requireAdopter, submitAvailability);
+router.post("/:id/availability", verifyToken, requireAdopter, requireActiveUser, submitAvailability);
 
 // Request reschedule
-router.put("/:id/reschedule-request", verifyToken, requireAdopter, requestReschedule);
+router.put("/:id/reschedule-request", verifyToken, requireAdopter, requireActiveUser, requestReschedule);
 
 // Cancel / withdraw application
 router.delete("/:id/cancel", verifyToken, requireAdopter, cancelApplication);
@@ -67,6 +68,9 @@ router.put("/:id/complete-meeting", verifyToken, requireShelter, completeMeetAnd
 // ============ COMMON SHELTER ROUTES ============
 // Get single application detail
 router.get("/:id", verifyToken, requireShelter, getApplicationById);
+
+// Regenerate AI Insights
+router.post("/:id/regenerate-insights", verifyToken, requireShelter, regenerateInsights);
 
 // Update application status
 router.put("/:id/status", verifyToken, requireShelter, updateApplicationStatus);

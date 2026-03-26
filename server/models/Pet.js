@@ -60,9 +60,82 @@ const petSchema = new mongoose.Schema({
   // Personality & Compatibility
   temperament: [String],
   compatibility: {
-    goodWithKids: { type: Boolean, default: false },
-    goodWithPets: { type: Boolean, default: false },
+    // Upgraded from Boolean → String enum for finer scoring
+    goodWithKids: {
+      type: String,
+      enum: ['yes', 'with-supervision', 'no'],
+      default: 'yes'
+    },
+    goodWithPets: {
+      type: String,
+      enum: ['yes', 'cats-only', 'dogs-only', 'no'],
+      default: 'yes'
+    },
+    // Deprecated — use environment.idealEnvironment instead; kept for backward compat
     apartmentFriendly: { type: Boolean, default: false }
+  },
+
+  // ── Behavioural Assessment (shelter-entered at intake, NEVER inferred from breed/size) ──
+  behaviour: {
+    energyScore: {
+      type: Number,
+      min: 1, max: 5,
+      // 1 = very low energy, 5 = very high energy (2+ hrs exercise daily)
+    },
+    separationAnxiety: {
+      type: String,
+      enum: ['none', 'mild', 'moderate', 'severe'],
+    },
+    attachmentStyle: {
+      type: String,
+      enum: ['independent', 'moderate', 'velcro'],
+    },
+    trainingDifficulty: {
+      type: String,
+      enum: ['easy', 'moderate', 'challenging'],
+    },
+    noiseLevel: {
+      type: String,
+      enum: ['quiet', 'moderate', 'vocal'],
+    },
+    sheddingLevel: {
+      type: String,
+      enum: ['none', 'low', 'moderate', 'high'],
+    },
+  },
+
+  // ── Top-level energy & cost fields (used directly by compatibility engine V2) ──
+  // energyLevel is the canonical field; energyScore in behaviour is the numeric form.
+  energyLevel: {
+    type: String,
+    enum: ['low', 'moderate', 'high', 'very-high'],
+  },
+  // Maximum comfortable hours the pet can be left alone
+  independenceTolerance: {
+    type: Number,
+    min: 0,
+    max: 24,
+  },
+  // Space requirement — coarser-grained than environment.idealEnvironment
+  spaceNeeds: {
+    type: String,
+    enum: ['apartment-ok', 'house-preferred', 'house-required'],
+  },
+  // Estimated monthly care cost in NPR (set by shelter at intake)
+  estimatedMonthlyCost: {
+    type: Number,
+    min: 0,
+    default: 0,
+  },
+
+  // ── Environment Requirements (shelter-entered at intake) ─────────────────────────────
+  environment: {
+    idealEnvironment: {
+      type: String,
+      enum: ['indoor-only', 'indoor-with-outdoor-access', 'garden-required', 'rural-preferred'],
+    },
+    // Minimum living space in square metres — 0 means no minimum
+    minSpaceSqm: { type: Number, min: 0, default: 0 },
   },
 
   // Status

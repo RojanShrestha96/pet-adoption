@@ -18,7 +18,12 @@ import {
     getShelterAdminStats,
     updateShelterAdminNotes,
     getPendingPetsQueue,
-    getAllDonations
+    getAllDonations,
+    getDonationsOverview,
+    exportDonationsCsv,
+    getAllUsers,
+    getUserDetail,
+    updateUserStatus
 } from "../controllers/adminDashboardController.js";
 
 const router = express.Router();
@@ -56,5 +61,12 @@ router.get("/moderation/pets", getPendingPetsQueue);
 
 // DONATIONS
 router.get("/donations", getAllDonations);
+router.get("/donations/overview", getDonationsOverview);
+router.get("/donations/export", exportDonationsCsv);
+
+// USER MANAGEMENT
+router.get("/users", getAllUsers);
+router.get("/users/:id", getUserDetail);
+router.patch("/users/:id/status", updateUserStatus);
 
 export default router;

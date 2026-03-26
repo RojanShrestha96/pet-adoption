@@ -1,7 +1,11 @@
 import Pet from "../models/Pet.js";
+import Shelter from "../models/Shelter.js";
 import Notification from "../models/Notification.js";
 import AdoptionApplication from "../models/AdoptionApplication.js";
+import AdopterProfile from "../models/AdopterProfile.js";
 import { notifyAllAdmins } from "./notificationController.js";
+import { calculateCompatibility } from "./compatibilityController.js";
+import { generateAdopterInsights } from "../services/aiService.js";
 
 // Create a new pet (Shelter only)
 export const createPet = async (req, res) => {
@@ -62,8 +66,8 @@ export const createPet = async (req, res) => {
       },
       temperament: temperament || [],
       compatibility: {
-        goodWithKids: goodWithKids || false,
-        goodWithPets: goodWithPets || false,
+        goodWithKids: goodWithKids || 'yes',
+        goodWithPets: goodWithPets || 'yes',
         apartmentFriendly: apartmentFriendly || false
       },
       shelter: shelterId,
@@ -138,15 +142,18 @@ export const getShelterPets = async (req, res) => {
 export const getPetById = async (req, res) => {
   try {
     const { id } = req.params;
-    const pet = await Pet.findById(id).populate('shelter', 'name email phone location');
+
+    // Use findByIdAndUpdate for the view increment so we never run Mongoose
+    // schema validation against stale/legacy data already in the DB.
+    const pet = await Pet.findByIdAndUpdate(
+      id,
+      { $inc: { views: 1 } },
+      { new: true }
+    ).populate('shelter', 'name email phone location');
 
     if (!pet) {
       return res.status(404).json({ message: "Pet not found" });
     }
-
-    // Increment views
-    pet.views += 1;
-    await pet.save();
 
     res.json(pet);
   } catch (error) {
@@ -341,27 +348,23 @@ export const reviewPet = async (req, res) => {
     const { action, notes } = req.body; // action: 'approve' or 'reject'
     const adminId = req.user.userId;
 
-    const pet = await Pet.findById(id);
+    if (!['approve', 'reject'].includes(action)) {
+      return res.status(400).json({ message: "Invalid action" });
+    }
+
+    const update = {
+      reviewStatus: action === 'approve' ? 'approved' : 'rejected',
+      adoptionStatus: action === 'approve' ? 'available' : 'rejected',
+      reviewNotes: notes || '',
+      reviewedBy: adminId,
+      reviewedAt: new Date()
+    };
+
+    const pet = await Pet.findByIdAndUpdate(id, update, { new: true, runValidators: false });
 
     if (!pet) {
       return res.status(404).json({ message: "Pet not found" });
     }
-
-    if (action === 'approve') {
-      pet.reviewStatus = 'approved';
-      pet.adoptionStatus = 'available';
-    } else if (action === 'reject') {
-      pet.reviewStatus = 'rejected';
-      pet.adoptionStatus = 'rejected';
-    } else {
-      return res.status(400).json({ message: "Invalid action" });
-    }
-
-    pet.reviewNotes = notes || '';
-    pet.reviewedBy = adminId;
-    pet.reviewedAt = new Date();
-
-    await pet.save();
 
     // Notify the shelter
     const notificationMessage = action === 'approve'
@@ -386,5 +389,194 @@ export const reviewPet = async (req, res) => {
   } catch (error) {
     console.error("Error reviewing pet:", error);
     res.status(500).json({ message: "Failed to review pet" });
+  }
+};
+
+/**
+ * Get compatibility preview for a pet (Adopter only)
+ */
+export const getCompatibilityPreview = async (req, res) => {
+  try {
+    const adopterId = req.user.userId;
+    const petId = req.params.id;
+
+    // 1. Get pet
+    const pet = await Pet.findById(petId);
+    if (!pet) return res.status(404).json({ message: "Pet not found" });
+
+    // 2. Get profile
+    const profile = await AdopterProfile.findOne({ adopter: adopterId });
+    if (!profile) {
+      return res.status(400).json({ message: "Complete your adopter profile to see a preview" });
+    }
+
+    // 3. Calculate score
+    const compatibilityData = calculateCompatibility(profile, pet);
+    const topRiskFlags = compatibilityData.advisories
+      .filter(a => a.type === "flag")
+      .slice(0, 3)
+      .map(a => a.message);
+
+    // 4. Try to find a cached AI insight from any application specifically for this pet+adopter pair
+    // We filter out null aiInsights where the adopter summary is present
+    const existingApp = await AdoptionApplication.findOne({
+      adopter: adopterId,
+      pet: petId,
+      "aiInsights.adopter": { $ne: null }
+    }).select('aiInsights');
+
+    let aiAdopterSummary = existingApp?.aiInsights?.adopter || null;
+
+    // 5. Generate fresh if none exists
+    if (!aiAdopterSummary) {
+      try {
+        const insights = await generateAdopterInsights(compatibilityData, pet, profile);
+        aiAdopterSummary = {
+          ...insights,
+          generatedAt: new Date()
+        };
+      } catch (err) {
+        console.warn("Soft fail: Adopter preview AI generation failed", err);
+        // Do not crash the preview if AI fails
+      }
+    }
+
+    res.json({
+      score: compatibilityData.percentage,
+      confidenceLevel: compatibilityData.confidenceLevel || "low",
+      topRiskFlags,
+      aiAdopterSummary,
+      cachedAt: new Date()
+    });
+
+  } catch (error) {
+    console.error("Error generating compatibility preview:", error);
+    res.status(500).json({ message: "Failed to generate compatibility preview" });
+  }
+};
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/pets/nearby?lat=&lng=&radius=25&species=&page=1&limit=12
+// Returns approved, available pets sorted by distance from a point.
+// Shelters without coordinates are automatically excluded by $geoNear.
+// ─────────────────────────────────────────────────────────────────────────────
+export const getPetsNearby = async (req, res) => {
+  try {
+    const { lat, lng, radius = 25, species, page = 1, limit = 12 } = req.query;
+
+    // Validate required coordinates
+    const latNum = parseFloat(lat);
+    const lngNum = parseFloat(lng);
+    console.log(`[NearSearch] Lat: ${latNum}, Lng: ${lngNum}, Radius: ${radius}`);
+    if (isNaN(latNum) || isNaN(lngNum)) {
+      return res.status(400).json({ message: 'lat and lng are required and must be valid numbers.' });
+    }
+    // 'null' string means Anywhere — use a very large radius so we still get distances
+    const radiusKm = (radius === 'null' || radius === '' || !radius)
+      ? 5000
+      : Math.min(Math.max(parseFloat(radius) || 25, 1), 5000);
+    const pageNum    = Math.max(parseInt(page)  || 1, 1);
+    const limitNum   = Math.min(parseInt(limit) || 12, 50);
+    const skip       = (pageNum - 1) * limitNum;
+
+    // Build pet-level match condition (applied post-$lookup via dot-prefix)
+    const petMatchStage = {
+      'pets.reviewStatus':   'approved',
+      'pets.adoptionStatus': { $in: ['available', 'pending'] },
+    };
+    if (species && species !== 'all') {
+      petMatchStage['pets.species'] = species === 'other'
+        ? { $nin: ['dog', 'cat'] }
+        : species;
+    }
+
+    // $geoNear MUST be the first stage — requires a 2dsphere index on the collection
+    const basePipeline = [
+      {
+        $geoNear: {
+          near:          { type: 'Point', coordinates: [lngNum, latNum] },
+          distanceField: 'distanceMeters',
+          maxDistance:   radiusKm * 1000, // convert km → metres
+          spherical:     true,
+          query: {
+            // Exclude shelters without geocoded coordinates and sentinel [0,0] values
+            'location.coordinates': {
+              $exists: true,
+              $not: { $size: 0 },
+              $nin: [[0, 0]],
+            },
+          },
+        },
+      },
+      // Join all pets that belong to this shelter
+      {
+        $lookup: {
+          from:         'pets',
+          localField:   '_id',
+          foreignField: 'shelter',
+          as:           'pets',
+        },
+      },
+      // One document per pet
+      { $unwind: '$pets' },
+      // Apply pet filters
+      { $match: petMatchStage },
+      // Add distanceKm field (rounded to 1 decimal)
+      {
+        $addFields: {
+          distanceKm: { $round: [{ $divide: ['$distanceMeters', 1000] }, 2] },
+        },
+      },
+      // Debug distances
+      { $addFields: { debugDist: '$distanceMeters' } },
+      // Nearest first
+      { $sort: { distanceKm: 1 } },
+      // Shape the response
+      {
+        $project: {
+          _id:           '$pets._id',
+          name:          '$pets.name',
+          species:       '$pets.species',
+          breed:         '$pets.breed',
+          age:           '$pets.age',
+          gender:        '$pets.gender',
+          size:          '$pets.size',
+          images:        '$pets.images',
+          adoptionStatus:'$pets.adoptionStatus',
+          temperament:   '$pets.temperament',
+          medical:       '$pets.medical',
+          compatibility: '$pets.compatibility',
+          createdAt:     '$pets.createdAt',
+          shelter: {
+            _id:      '$_id',
+            name:     '$name',
+            city:     '$city',
+            location: '$location',
+          },
+          distanceKm: 1,
+        },
+      },
+    ];
+
+    // Run paginated query and count in parallel
+    const [pets, countResult] = await Promise.all([
+      Shelter.aggregate([...basePipeline, { $skip: skip }, { $limit: limitNum }]),
+      Shelter.aggregate([...basePipeline, { $count: 'total' }]),
+    ]);
+
+    const total = countResult[0]?.total ?? 0;
+
+    return res.json({
+      pets,
+      total,
+      page:       pageNum,
+      totalPages: Math.ceil(total / limitNum),
+      radiusKm,
+      center: { lat: latNum, lng: lngNum },
+    });
+  } catch (error) {
+    console.error('Error in getPetsNearby:', error);
+    res.status(500).json({ message: 'Failed to fetch nearby pets', error: error.message });
   }
 };

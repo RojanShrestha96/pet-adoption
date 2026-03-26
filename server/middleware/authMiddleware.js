@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import User from "../models/User.js";
 
 export const verifyToken = (req, res, next) => {
     try {
@@ -54,4 +55,39 @@ export const requireSuperAdmin = (req, res, next) => {
         return res.status(403).json({ message: "Access denied. Super Admin only." });
     }
     next();
+};
+
+// Middleware to block suspended/banned users from "write" actions
+export const requireActiveUser = async (req, res, next) => {
+    try {
+        if (!req.user || !req.user.userId) {
+            return res.status(401).json({ message: "Authentication required" });
+        }
+
+        // Fetch fresh status from DB (JWT might be stale)
+        const user = await User.findById(req.user.userId).select('status statusReason');
+        
+        if (!user) {
+            return res.status(404).json({ message: "User account not found" });
+        }
+
+        if (user.status === 'banned') {
+            return res.status(403).json({ 
+                message: `Account banned. Reason: ${user.statusReason || 'Violation of terms.'}`,
+                isBanned: true 
+            });
+        }
+
+        if (user.status === 'suspended') {
+            return res.status(403).json({ 
+                message: `Account suspended. Reason: ${user.statusReason || 'Temporary restriction.'}`,
+                isSuspended: true
+            });
+        }
+
+        next();
+    } catch (error) {
+        console.error("Auth status check error:", error);
+        res.status(500).json({ message: "Internal server error during status verification" });
+    }
 };

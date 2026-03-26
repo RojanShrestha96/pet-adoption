@@ -9,9 +9,11 @@ import {
   updateProfile,
   changePassword,
   getProfile,
-  toggleFavorite
+  toggleFavorite,
+  updateProfileImage
 } from "../controllers/authController.js";
 import { verifyToken, requireAdopter } from "../middleware/authMiddleware.js";
+import { uploadImages } from "../middleware/uploadMiddleware.js";
 import {
   getAdopterProfile,
   upsertAdopterProfile,
@@ -37,6 +39,7 @@ router.post("/reset-password", resetPassword);
 
 // Profile update (protected route)
 router.put("/profile", verifyToken, updateProfile);
+router.post("/profile-image", verifyToken, uploadImages.single("image"), updateProfileImage);
 router.post("/change-password", verifyToken, changePassword);
 
 // New endpoints for favorites system

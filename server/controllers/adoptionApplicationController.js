@@ -2,6 +2,9 @@ import mongoose from "mongoose";
 import AdoptionApplication from "../models/AdoptionApplication.js";
 import Pet from "../models/Pet.js";
 import Notification from "../models/Notification.js";
+import AdopterProfile from "../models/AdopterProfile.js";
+import { calculateCompatibility } from "./compatibilityController.js";
+import { generateShelterInsights, generateAdopterInsights } from "../services/aiService.js";
 
 /**
  * Emit a new notification to a user's socket room immediately after DB write.
@@ -106,11 +109,37 @@ export const createApplication = async (req, res) => {
 
     await application.save();
 
-    // Populate for response
-    await application.populate([
-      { path: 'pet', select: 'name species images' },
-      { path: 'adopter', select: 'name email' }
-    ]);
+    // Trigger AI insights generation in the background (fire-and-forget)
+    (async () => {
+      try {
+        const profileData = application.profileSnapshot || (await AdopterProfile.findOne({ adopter: adopterId }));
+        if (profileData && application.pet) {
+          const compatibilityScore = calculateCompatibility(profileData, application.pet);
+          
+          // Generate Adopter Insights
+          generateAdopterInsights(compatibilityScore, application.pet, profileData)
+            .then(async (insights) => {
+              application.aiInsights = { 
+                ...application.aiInsights,
+                adopter: { ...insights, status: 'success', generatedAt: new Date() } 
+              };
+              await application.save();
+            }).catch(e => console.error("Async Adopter AI Insight error:", e));
+
+          // Generate Shelter Insights
+          generateShelterInsights(compatibilityScore, application.pet, profileData)
+            .then(async (insights) => {
+              application.aiInsights = { 
+                ...application.aiInsights,
+                shelter: { ...insights, status: 'success', generatedAt: new Date() } 
+              };
+              await application.save();
+            }).catch(e => console.error("Async Shelter AI Insight error:", e));
+        }
+      } catch (err) {
+        console.error("Background AI generation trigger error:", err);
+      }
+    })();
 
     // Create notification for shelter
     const shelterName = pet.shelter.name || 'A shelter';
@@ -242,7 +271,62 @@ export const getApplicationById = async (req, res) => {
       });
     }
 
-    res.json(application);
+    // Use snapshot if available, else fetch the live profile for backward compatibility
+    let profileData = application.profileSnapshot;
+    if (!profileData) {
+      profileData = await AdopterProfile.findOne({ adopter: application.adopter._id });
+    }
+
+    let compatibilityScore = null;
+    if (application.pet && profileData) {
+      compatibilityScore = calculateCompatibility(profileData, application.pet);
+    }
+
+    // AI Insights Generation (Shelter) - BACKGROUND TRIGGER
+    if (compatibilityScore && (!application.aiInsights?.shelter?.explanation || application.aiInsights?.shelter?.status === 'none' || application.aiInsights?.shelter?.status === 'error')) {
+      if (!application.aiInsights) application.aiInsights = {};
+      
+      // Set generating status and return immediately
+      application.aiInsights.shelter = { 
+        ...application.aiInsights.shelter,
+        status: 'generating',
+        error: null 
+      };
+      await application.save();
+
+      // Trigger generation in background
+      (async () => {
+        try {
+          const shelterInsights = await generateShelterInsights(compatibilityScore, application.pet, profileData);
+          const currentApp = await AdoptionApplication.findById(application._id);
+          if (currentApp) {
+            currentApp.aiInsights.shelter = {
+              ...shelterInsights,
+              status: 'success',
+              error: null,
+              generatedAt: new Date()
+            };
+            await currentApp.save();
+          }
+        } catch (aiErr) {
+          console.error("Async AI Insight generation failed for shelter:", aiErr);
+          const currentApp = await AdoptionApplication.findById(application._id);
+          if (currentApp) {
+            currentApp.aiInsights.shelter = {
+              ...currentApp.aiInsights.shelter,
+              status: 'error',
+              error: "AI Insights temporarily unavailable."
+            };
+            await currentApp.save();
+          }
+        }
+      })();
+    }
+
+    const responseData = application.toObject();
+    responseData.compatibilityScore = compatibilityScore;
+
+    res.json(responseData);
 
   } catch (error) {
     console.error("Error fetching application:", error);
@@ -557,8 +641,63 @@ export const getAdopterApplicationById = async (req, res) => {
       });
     }
 
+    let profileData = application.profileSnapshot;
+    if (!profileData) {
+      // Fallback
+      profileData = await AdopterProfile.findOne({ adopter: application.adopter._id });
+    }
+
+    let compatibilityScore = null;
+    if (application.pet && profileData) {
+       compatibilityScore = calculateCompatibility(profileData, application.pet);
+    }
+
+    // AI Insights Generation (Adopter) - BACKGROUND TRIGGER
+    if (compatibilityScore && (!application.aiInsights || !application.aiInsights.adopter || application.aiInsights.adopter.status === 'none' || application.aiInsights.adopter.status === 'error')) {
+      if (!application.aiInsights) application.aiInsights = {};
+      
+      // Set generating status and return immediately
+      application.aiInsights.adopter = {
+        ...application.aiInsights.adopter,
+        status: 'generating',
+        error: null
+      };
+      await application.save();
+
+      // Trigger generation in background
+      (async () => {
+        try {
+          const adopterInsights = await generateAdopterInsights(compatibilityScore, application.pet, profileData);
+          const currentApp = await AdoptionApplication.findById(application._id);
+          if (currentApp) {
+            currentApp.aiInsights.adopter = {
+              ...adopterInsights,
+              status: 'success',
+              error: null,
+              generatedAt: new Date()
+            };
+            await currentApp.save();
+          }
+        } catch (aiErr) {
+          console.error("Async AI Insight generation failed for adopter:", aiErr);
+          const currentApp = await AdoptionApplication.findById(application._id);
+          if (currentApp) {
+            currentApp.aiInsights.adopter = {
+              ...currentApp.aiInsights.adopter,
+              status: 'error',
+              error: "Insights unavailable."
+            };
+            await currentApp.save();
+          }
+        }
+      })();
+    }
+
     // Use model method to filter internal data (backend security)
     const safeData = application.getAdopterView();
+    if (compatibilityScore) {
+       safeData.compatibilityScore = compatibilityScore;
+    }
     
     res.json(safeData);
 
@@ -682,9 +821,93 @@ export const cancelApplication = async (req, res) => {
 
   } catch (error) {
     console.error("Error cancelling application:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+/**
+ * Regenerate AI Insights for an application (Shelter only)
+ */
+export const regenerateInsights = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const shelterId = req.user.userId;
+
+    const application = await AdoptionApplication.findOne({
+      _id: id,
+      shelter: shelterId
+    }).populate('pet');
+
+    if (!application) {
+      return res.status(404).json({ message: "Application not found" });
+    }
+
+    let profileData = application.profileSnapshot;
+    if (!profileData) {
+      profileData = await AdopterProfile.findOne({ adopter: application.adopter });
+    }
+
+    if (!profileData) {
+      return res.status(400).json({ message: "No adopter profile found to base insights on." });
+    }
+
+    const compatibilityScore = calculateCompatibility(profileData, application.pet);
+
+    // Clear existing
+    if (!application.aiInsights) {
+      application.aiInsights = {};
+    }
+    
+    application.aiInsights.shelter = null;
+    application.aiInsights.adopter = null;
+
+    // Regenerate both
+    try {
+      // Set both to generating
+      application.aiInsights.shelter = { ...application.aiInsights.shelter, status: 'generating', error: null };
+      application.aiInsights.adopter = { ...application.aiInsights.adopter, status: 'generating', error: null };
+      await application.save();
+
+      const [shelterInsights, adopterInsights] = await Promise.all([
+        generateShelterInsights(compatibilityScore, application.pet, profileData).catch(e => { 
+          console.error("Shelter AI Error:", e);
+          return { error: true, technical: e.message };
+        }),
+        generateAdopterInsights(compatibilityScore, application.pet, profileData).catch(e => {
+          console.error("Adopter AI Error:", e);
+          return { error: true, technical: e.message };
+        })
+      ]);
+
+      if (shelterInsights && !shelterInsights.error) {
+        application.aiInsights.shelter = { ...shelterInsights, status: 'success', error: null, generatedAt: new Date() };
+      } else {
+        application.aiInsights.shelter = { status: 'error', error: "Failed to generate shelter insights." };
+      }
+
+      if (adopterInsights && !adopterInsights.error) {
+        application.aiInsights.adopter = { ...adopterInsights, status: 'success', error: null, generatedAt: new Date() };
+      } else {
+        application.aiInsights.adopter = { status: 'error', error: "Failed to generate adopter insights." };
+      }
+
+      await application.save();
+
+      res.json({
+        message: "Insights regeneration process completed",
+        aiInsights: application.aiInsights
+      });
+
+    } catch (err) {
+      console.error("Regeneration logic failed:", err);
+      res.status(500).json({ message: "Failed to process insights regeneration", error: err.message });
+    }
+
+  } catch (error) {
     res.status(500).json({
-      message: "Failed to cancel application",
+      message: "Server error during regeneration",
       error: error.message
     });
   }
 };
+

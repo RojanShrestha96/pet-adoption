@@ -1,5 +1,5 @@
 import express from "express";
-import { verifyToken, requireShelter, requireAdmin } from "../middleware/authMiddleware.js";
+import { verifyToken, requireShelter, requireAdmin, requireAdopter } from "../middleware/authMiddleware.js";
 import {
   createPet,
   getShelterPets,
@@ -8,17 +8,25 @@ import {
   deletePet,
   getApprovedPets,
   getPendingReviewPets,
-  reviewPet
+  reviewPet,
+  getCompatibilityPreview,
+  getPetsNearby
 } from "../controllers/petController.js";
 
 const router = express.Router();
 
 // ============ PUBLIC ROUTES ============
+// Nearby pets (MUST be before /:id to avoid route conflict)
+router.get("/nearby", getPetsNearby);
+
 // Get all approved pets (for adopters)
 router.get("/", getApprovedPets);
 
 // Get single pet by ID
 router.get("/:id", getPetById);
+
+// Compatibility preview (adopter only)
+router.get("/:id/compatibility-preview", verifyToken, requireAdopter, getCompatibilityPreview);
 
 // ============ SHELTER ROUTES ============
 // Create a new pet (requires shelter auth)

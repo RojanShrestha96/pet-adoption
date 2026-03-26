@@ -21,6 +21,58 @@ const adoptionApplicationSchema = new mongoose.Schema({
     index: true
   },
 
+  // ── Profile Snapshot ──────────────────────────────────────
+  // Frozen copy of AdopterProfile at time of submission. Never mutated after save.
+  profileSnapshot: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null,
+  },
+  // Version number of the snapshot — used for delta detection on shelter view
+  profileVersionAtSubmission: {
+    type: Number,
+    default: null,
+  },
+
+  // ── Compatibility Snapshot ────────────────────────────────
+  // Full engine output stored at submission time. NEVER re-computed or mutated.
+  // Gives shelters an accurate picture of the score at the moment of applying.
+  compatibilitySnapshot: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null,
+  },
+
+  // ── AI Insights (cached, server-generated) ────────────────
+  // Null until first generated. Regeneratable by shelter staff.
+  // Never contains PII — only engine output and anonymised lifestyle signals.
+  aiInsights: {
+    type: {
+      shelter: {
+        explanation: { type: String },
+        questions: [{ type: String }],
+        topConcern: { type: String },
+        generatedAt: { type: Date },
+        status: { 
+          type: String, 
+          enum: ['none', 'generating', 'success', 'error'],
+          default: 'none'
+        },
+        error: { type: String }
+      },
+      adopter: {
+        summary: { type: String },
+        suggestion: { type: String },
+        generatedAt: { type: Date },
+        status: { 
+          type: String, 
+          enum: ['none', 'generating', 'success', 'error'],
+          default: 'none'
+        },
+        error: { type: String }
+      },
+    },
+    default: null,
+  },
+
   // Screening Information
   screening: {
     adoptedBefore: {
@@ -43,10 +95,10 @@ const adoptionApplicationSchema = new mongoose.Schema({
       required: true,
       enum: ['yes', 'maybe', 'no']
     },
+    // Deprecated — low signal, no longer collected in new applications
     timeline: {
       type: String,
-      required: true,
-      enum: ['immediately', 'within a week', 'within a month', 'just browsing']
+      enum: ['immediately', 'within a week', 'within a month', 'just browsing', '']
     },
     specialNeeds: {
       type: String,
@@ -110,6 +162,11 @@ const adoptionApplicationSchema = new mongoose.Schema({
       enum: ['rent', 'own', 'live with family']
     },
     landlordPermission: [String], // URLs if renting
+    // Confirms the landlord permission specifically covers this pet's species/size
+    landlordPermissionCoversPetType: {
+      type: Boolean,
+      default: null,
+    },
     hasChildren: {
       type: Boolean,
       default: false
@@ -146,6 +203,7 @@ const adoptionApplicationSchema = new mongoose.Schema({
       type: String,
       required: true
     },
+    // DEPRECATED — kept for old records only, no longer collected
     adoptionTimeline: String,
     readyForHomeVisit: {
       type: Boolean,
@@ -154,7 +212,18 @@ const adoptionApplicationSchema = new mongoose.Schema({
     handleVetVisits: {
       type: Boolean,
       required: true
-    }
+    },
+    // ── New questionnaire fields ────────────────────────────
+    // "Describe a typical weekday in your home..."
+    typicalWeekdayRoutine: { type: String },
+    // "If you were unexpectedly unable to care for your pet... backup plan?"
+    emergencyCarePlan: { type: String },
+    // "What specifically about this pet's personality/needs made you choose them?"
+    specificPetMotivation: { type: String },
+    // "Have you researched typical monthly costs?..."
+    monthlyBudgetEstimate: { type: String },
+    // Conditional — only asked when adopter has upcomingLifeChanges in profile
+    lifeChangesExplanation: { type: String },
   },
 
   // Application Status

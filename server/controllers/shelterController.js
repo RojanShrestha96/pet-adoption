@@ -3,6 +3,8 @@ import Admin from "../models/Admin.js";
 import Notification from "../models/Notification.js";
 import Pet from "../models/Pet.js";
 import AdoptionApplication from "../models/AdoptionApplication.js";
+import Donation from "../models/Donation.js";
+import { geocodeAddress } from "../services/geoService.js";
 
 // GET ALL SHELTERS (Public - Limited for Homepage)
 export const getAllShelters = async (req, res) => {
@@ -72,6 +74,50 @@ export const updateShelterProfile = async (req, res) => {
       return res.status(403).json({ message: "Only shelters can update this profile" });
     }
 
+    const currentShelter = await Shelter.findById(req.user.userId);
+    if (!currentShelter) return res.status(404).json({ message: "Shelter not found" });
+
+    // ── Pre-process Geocoding if address info changes ──
+    let newLocation = req.body.location; // might already have coordinates from frontend
+
+    const addressChanged = 
+      address !== currentShelter.address || 
+      city !== currentShelter.city || 
+      state !== currentShelter.state;
+
+    if (addressChanged) {
+      const fullQuery = [address, city, state, "Nepal"].filter(Boolean).join(", ");
+      const geoResult = await geocodeAddress(fullQuery);
+
+      if (geoResult) {
+         newLocation = {
+           type: 'Point',
+           coordinates: [geoResult.lng, geoResult.lat], // [lng, lat]
+           formattedAddress: geoResult.formattedAddress
+         };
+      } else {
+         console.warn(`[ShelterController] Geocoding failed for: ${fullQuery}`);
+      }
+    } else if (newLocation && newLocation.lat && newLocation.lng && !newLocation.type) {
+      const parsedLat = parseFloat(newLocation.lat);
+      const parsedLng = parseFloat(newLocation.lng);
+      // Only convert to GeoJSON if coordinates are valid non-zero numbers
+      if (!isNaN(parsedLat) && !isNaN(parsedLng) && parsedLat !== 0 && parsedLng !== 0) {
+        newLocation = {
+          type: 'Point',
+          coordinates: [parsedLng, parsedLat], // GeoJSON: [lng, lat]
+          formattedAddress: newLocation.formattedAddress
+        };
+      } else {
+        // Preserve existing location data, don't save invalid coordinates
+        console.warn(`[ShelterController] Rejected invalid coordinates: lat=${parsedLat}, lng=${parsedLng}`);
+        newLocation = currentShelter.location;
+      }
+    } else if (!newLocation || (!newLocation.type && !newLocation.lat)) {
+      // No location data sent – preserve existing
+      newLocation = currentShelter.location;
+    }
+
     const updatedShelter = await Shelter.findByIdAndUpdate(
       req.user.userId,
       {
@@ -85,7 +131,7 @@ export const updateShelterProfile = async (req, res) => {
         state,
         zipCode,
         contactPerson,
-        location: req.body.location,
+        location: newLocation,
         preferences: req.body.preferences,
         documentation: req.body.documentation,
         operatingHours: req.body.operatingHours,
@@ -334,5 +380,69 @@ export const getShelterAnalytics = async (req, res) => {
   } catch (error) {
     console.error("Error fetching shelter analytics:", error);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+// GET SHELTER DONATION STATS (Dashboard)
+export const getShelterDonationStats = async (req, res) => {
+  try {
+    const shelterId = req.user.userId;
+
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // Get all completed donations for this shelter
+    const donations = await Donation.find({ shelterId, status: "completed" }).populate('petId', 'name images').sort({ createdAt: -1 });
+
+    const totalReceived = donations.reduce((sum, d) => sum + d.amount, 0);
+    const donationsThisMonth = donations
+      .filter(d => new Date(d.createdAt) >= startOfMonth)
+      .reduce((sum, d) => sum + d.amount, 0);
+
+    const uniqueDonors = new Set(donations.map(d => d.userId?.toString()).filter(Boolean));
+    const donorCount = uniqueDonors.size;
+
+    // Per-pet breakdown
+    const petMap = {}; // key: petId toString
+    donations.forEach(d => {
+      if (!d.petId) return;
+      const id = d.petId._id.toString();
+      if (!petMap[id]) {
+        petMap[id] = {
+          petId: id,
+          petName: d.petId.name,
+          petImage: d.petId.images?.[0] || null,
+          donationCount: 0,
+          totalAmount: 0,
+          lastDonation: d.createdAt
+        };
+      }
+      petMap[id].donationCount += 1;
+      petMap[id].totalAmount += d.amount;
+      if (new Date(d.createdAt) > new Date(petMap[id].lastDonation)) {
+        petMap[id].lastDonation = d.createdAt;
+      }
+    });
+    
+    const perPet = Object.values(petMap).sort((a, b) => b.totalAmount - a.totalAmount);
+
+    // PRIVACY: No donor PII exposed
+    const recentDonations = donations.slice(0, 10).map(d => ({
+      amount: d.amount,
+      petName: d.petId?.name || null,
+      message: d.message,
+      createdAt: d.createdAt
+    }));
+
+    res.json({
+      totalReceived,
+      donationsThisMonth,
+      donorCount,
+      perPet,
+      recentDonations
+    });
+  } catch (error) {
+    console.error("Error fetching shelter donation stats:", error);
+    res.status(500).json({ message: "Server error fetching donation stats" });
   }
 };

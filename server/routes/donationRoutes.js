@@ -1,9 +1,10 @@
 
 import express from "express";
+import mongoose from "mongoose";
 import Pet from "../models/Pet.js";
 import Shelter from "../models/Shelter.js";
 import Donation from "../models/Donation.js";
-import { verifyToken, requireAdmin } from "../middleware/authMiddleware.js";
+import { verifyToken, requireAdmin, requireActiveUser } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
@@ -13,15 +14,51 @@ const router = express.Router();
 // ─────────────────────────────────────────────
 router.get("/my-donations", verifyToken, async (req, res) => {
   try {
-    const donations = await Donation.find({ userId: req.user._id })
+    const donations = await Donation.find({ userId: req.user._id, status: "completed" })
       .populate("petId", "name species images")
-      .populate("shelterId", "name city")
+      .populate("shelterId", "name city address")
+      .populate("userId", "name")
       .sort({ createdAt: -1 });
 
     res.status(200).json({ success: true, donations });
   } catch (error) {
     console.error("Fetch user donations error:", error);
     res.status(500).json({ success: false, message: "Failed to fetch your donations" });
+  }
+});
+
+// ─────────────────────────────────────────────
+// GET /api/donations/pet-stats/:petId
+// Returns donation stats for a specific pet
+// ─────────────────────────────────────────────
+router.get("/pet-stats/:petId", async (req, res) => {
+  try {
+    const { petId } = req.params;
+
+    const stats = await Donation.aggregate([
+      {
+        $match: {
+          petId: new mongoose.Types.ObjectId(petId),
+          status: "completed"
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalRaised: { $sum: "$amount" },
+          donorCount: { $sum: 1 } // Simple count of completed donations as requested
+        }
+      }
+    ]);
+
+    const result = stats[0] || { totalRaised: 0, donorCount: 0 };
+    // Hardcoded goal amount as requested
+    result.goalAmount = 50000;
+
+    res.status(200).json({ success: true, stats: result });
+  } catch (error) {
+    console.error("Fetch pet stats error:", error);
+    res.status(500).json({ success: false, message: "Failed to fetch pet stats" });
   }
 });
 
@@ -55,7 +92,31 @@ router.get("/featured-pet", async (req, res) => {
       });
     }
 
-    res.status(200).json({ success: true, pet });
+    // Fetch stats for this featured pet
+    const stats = await Donation.aggregate([
+      {
+        $match: {
+          petId: pet._id,
+          status: "completed"
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalRaised: { $sum: "$amount" },
+          donorCount: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const resultStats = stats[0] || { totalRaised: 0, donorCount: 0 };
+    resultStats.goalAmount = 50000;
+
+    res.status(200).json({ 
+      success: true, 
+      pet,
+      stats: resultStats 
+    });
   } catch (error) {
     console.error("Featured pet fetch error:", error);
     res.status(500).json({ success: false, message: "Failed to fetch featured pet" });
@@ -123,7 +184,7 @@ router.get("/stories", async (req, res) => {
 // PUT /api/donations/:id/message
 // Updates the message for a specific donation
 // ─────────────────────────────────────────────
-router.put("/:id/message", verifyToken, async (req, res) => {
+router.put("/:id/message", verifyToken, requireActiveUser, async (req, res) => {
   try {
     const { id } = req.params;
     const { message } = req.body;

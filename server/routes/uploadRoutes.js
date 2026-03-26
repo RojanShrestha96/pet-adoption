@@ -32,7 +32,7 @@ router.post('/images', verifyToken, requireShelter, (req, res, next) => {
       return res.status(400).json({ message: 'No images uploaded' });
     }
 
-    const urls = req.files.map(file => getFileUrl(file.filename, 'images'));
+    const urls = req.files.map(file => getFileUrl(file));
     
     res.json({
       message: 'Images uploaded successfully',
@@ -52,7 +52,7 @@ router.post('/documents', verifyToken, uploadDocuments.array('documents', 10), (
       return res.status(400).json({ message: 'No documents uploaded' });
     }
 
-    const urls = req.files.map(file => getFileUrl(file.filename, 'documents'));
+    const urls = req.files.map(file => getFileUrl(file));
     
     res.json({
       message: 'Documents uploaded successfully',
@@ -73,8 +73,8 @@ router.post('/pet-files', verifyToken, requireShelter,
   ]), 
   (req, res) => {
     try {
-      const imageUrls = (req.files?.images || []).map(file => getFileUrl(file.filename, 'images'));
-      const documentUrls = (req.files?.documents || []).map(file => getFileUrl(file.filename, 'documents'));
+      const imageUrls = (req.files?.images || []).map(file => getFileUrl(file));
+      const documentUrls = (req.files?.documents || []).map(file => getFileUrl(file));
       
       res.json({
         message: 'Files uploaded successfully',

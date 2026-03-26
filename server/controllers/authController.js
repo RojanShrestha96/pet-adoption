@@ -3,6 +3,7 @@ import Shelter from "../models/Shelter.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { generateOTP, sendOTPEmail, verifyOTP } from "../utils/emailService.js";
+import { getFileUrl } from "../middleware/uploadMiddleware.js";
 
 // SIGN UP - ADOPTER
 export const registerAdopter = async (req, res) => {
@@ -210,6 +211,13 @@ export const loginUser = async (req, res) => {
     // User not found
     if (!user) {
       return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    // Check if banned
+    if (user.status === 'banned') {
+      return res.status(403).json({ 
+        message: `Account suspended/banned. Reason: ${user.statusReason || 'Violation of platform guidelines.'}` 
+      });
     }
 
     // Check if email is verified
@@ -681,5 +689,52 @@ export const toggleFavorite = async (req, res) => {
   } catch (error) {
     console.error("Toggle favorite error:", error);
     return res.status(500).json({ message: "Server error toggling favorite" });
+  }
+};
+
+// UPDATE PROFILE IMAGE
+export const updateProfileImage = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "No image file provided" });
+    }
+
+    const userId = req.user.userId;
+    const userType = req.user.type;
+    const imageUrl = getFileUrl(req.file);
+
+    let user;
+    if (userType === "adopter") {
+      user = await User.findByIdAndUpdate(
+        userId,
+        { profileImage: imageUrl },
+        { new: true }
+      );
+    } else {
+      user = await Shelter.findByIdAndUpdate(
+        userId,
+        { logo: imageUrl }, // Shelter uses 'logo' as profile image
+        { new: true }
+      );
+    }
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    return res.status(200).json({
+      message: "Profile image updated successfully",
+      profileImage: imageUrl,
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        profileImage: userType === "adopter" ? user.profileImage : user.logo,
+        type: userType,
+      },
+    });
+  } catch (error) {
+    console.error("Update profile image error:", error);
+    return res.status(500).json({ message: "Server error updating profile image" });
   }
 };
