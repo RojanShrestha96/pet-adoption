@@ -13,6 +13,10 @@ import uploadRoutes from "./routes/uploadRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import adoptionRoutes from "./routes/adoptionRoutes.js";
+import donationRoutes, { rotateFeaturedPet } from "./routes/donationRoutes.js";
+import settingsRoutes from "./routes/settingsRoutes.js";
+import geoRoutes from "./routes/geoRoutes.js";
+import testRoutes from "./routes/testRoutes.js";
 
 dotenv.config();
 
@@ -43,6 +47,10 @@ app.use("/api/upload", uploadRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/api/applications", adoptionRoutes);
+app.use("/api/donations", donationRoutes);
+app.use("/api/settings", settingsRoutes);
+app.use("/api/geocode", geoRoutes);       // Public geocoding endpoint
+app.use("/api/test", testRoutes);         // Internal test utility
 
 // MongoDB connection
 // MongoDB connection
@@ -131,8 +139,58 @@ app.get("/", (req, res) => {
 
 // Start server
 const PORT = process.env.PORT || 5000;
+const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+
+// One-time migration: convert legacy boolean compatibility fields to new string enums.
+// One-time migration: convert legacy boolean compatibility fields to new string enums.
+const migrateCompatibilityFields = async () => {
+  try {
+    const Pet = mongoose.model('Pet');
+    
+    // Fix goodWithKids: true -> 'yes', false -> 'no'
+    const res1 = await Pet.updateMany(
+      { 'compatibility.goodWithKids': true },
+      { $set: { 'compatibility.goodWithKids': 'yes' } }
+    );
+    const res2 = await Pet.updateMany(
+      { 'compatibility.goodWithKids': false },
+      { $set: { 'compatibility.goodWithKids': 'no' } }
+    );
+    
+    // Fix goodWithPets: true -> 'yes', false -> 'no'
+    const res3 = await Pet.updateMany(
+      { 'compatibility.goodWithPets': true },
+      { $set: { 'compatibility.goodWithPets': 'yes' } }
+    );
+    const res4 = await Pet.updateMany(
+      { 'compatibility.goodWithPets': false },
+      { $set: { 'compatibility.goodWithPets': 'no' } }
+    );
+
+    const totalFixed = res1.modifiedCount + res2.modifiedCount + res3.modifiedCount + res4.modifiedCount;
+    
+    if (totalFixed > 0) {
+      console.log(`[Migration] Success: Fixed ${totalFixed} legacy compatibility field(s).`);
+    } else {
+      console.log('[Migration] Database is clean.');
+    }
+  } catch (err) {
+    console.error('[Migration] Error:', err.message);
+  }
+};
+
 connectDB().then(() => {
   httpServer.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });
+
+  // Run migration
+  migrateCompatibilityFields().catch(console.error);
+
+  // Featured pet rotation — every 6 hours
+  rotateFeaturedPet().catch(console.error); // Run once on startup
+  setInterval(() => {
+    rotateFeaturedPet().catch(console.error);
+  }, SIX_HOURS_MS);
+  console.log("[FeaturedPet] Rotation job started (every 6h)");
 });
