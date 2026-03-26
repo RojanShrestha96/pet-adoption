@@ -4,7 +4,7 @@ import { MapPin, PawPrint, ArrowRight } from "lucide-react";
 import { Card } from "../ui/Card";
 import { Link } from "react-router-dom";
 import { Button } from "../ui/Button";
-import type { Shelter } from "../data/mockData";
+import type { Shelter } from "../../data/mockData";
 
 export interface ShelterCardProps {
   shelter: Shelter;
@@ -20,9 +20,9 @@ export function ShelterCard({ shelter }: ShelterCardProps) {
       >
         {/* Image with overlay */}
         <div className="relative overflow-hidden">
-          {shelter.image ? (
+          {shelter.logo || shelter.image ? (
             <img
-              src={shelter.image}
+              src={shelter.logo || shelter.image}
               alt={shelter.name}
               className="w-full h-40 object-cover transition-transform duration-300 hover:scale-105"
             />
@@ -37,7 +37,7 @@ export function ShelterCard({ shelter }: ShelterCardProps) {
               <span className="text-4xl font-bold text-white tracking-wider">
                 {shelter.name
                   .split(" ")
-                  .map((word) => word[0])
+                  .map((word: string) => word[0])
                   .join("")
                   .substring(0, 2)
                   .toUpperCase()}

@@ -5,15 +5,17 @@ export interface ToggleSwitchProps {
   onChange: (checked: boolean) => void;
   label?: string;
   description?: string;
+  disabled?: boolean;
 }
 export function ToggleSwitch({
   checked,
   onChange,
   label,
   description,
+  disabled = false,
 }: ToggleSwitchProps) {
   return (
-    <div className="flex items-center justify-between">
+    <div className={`flex items-center justify-between ${disabled ? "opacity-50 pointer-events-none" : ""}`}>
       <div className="flex-1">
         {label && (
           <p
@@ -37,11 +39,12 @@ export function ToggleSwitch({
         )}
       </div>
       <button
-        onClick={() => onChange(!checked)}
+        onClick={() => !disabled && onChange(!checked)}
         className="relative w-12 h-6 rounded-full transition-colors"
         style={{
           background: checked ? "var(--color-primary)" : "var(--color-border)",
         }}
+        disabled={disabled}
       >
         <motion.div
           className="absolute top-1 w-4 h-4 rounded-full bg-white"

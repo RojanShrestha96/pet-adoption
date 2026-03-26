@@ -22,11 +22,21 @@ export interface AdopterPersonalInfo {
 
 export interface AdopterHousehold {
   homeType?: string;
-  rentOwn?: string;
-  landlordPermission?: string[];
+  // V2.1 New Housing schema
+  housing?: {
+    type?: string;
+    landlordPermission?: boolean;
+  };
+  rentOwn?: string; // legacy
+  landlordPermission?: string[]; // legacy file upload
   hasChildren?: boolean;
+  childrenAges?: string[]; // V2.1
   childrenDetails?: string;
-  existingPets?: string;
+  // V2.1 explicit pet booleans
+  hasDogs?: boolean;
+  hasCats?: boolean;
+  hasSmallAnimals?: boolean;
+  existingPets?: string; // legacy text
   hasFencedYard?: boolean;
   safeEnvironment?: boolean;
   medicalAffordability?: boolean;
@@ -36,6 +46,7 @@ export interface AdopterHousehold {
 
 export interface AdopterLifestyle {
   activityLevel?: string;
+  monthlyPetBudget?: string; // V2.1
   hoursAwayPerDay?: number;
   experienceLevel?: string;
   dailyRoutine?: string;

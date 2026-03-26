@@ -881,7 +881,7 @@ export function AdminAddPetPage() {
   };
   return (
     <div
-      className="flex min-h-screen"
+      className="admin-layout flex min-h-screen"
       style={{
         background: "var(--color-background)",
       }}

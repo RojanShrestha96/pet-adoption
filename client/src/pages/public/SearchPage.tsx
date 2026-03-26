@@ -4,6 +4,7 @@ import {
   SlidersHorizontal,
   X,
   Search,
+  MapPin,
   PawPrint,
   Sparkles,
   ArrowUpDown,
@@ -12,6 +13,8 @@ import {
 } from "lucide-react";
 import { FilterPanel, FilterOptions } from "../../components/forms/FilterPanel";
 import { PetCard } from "../../components/pets/PetCard";
+import LocationSearchBar from "../../components/forms/LocationSearchBar";
+import RadiusFilter from "../../components/forms/RadiusFilter";
 import type { Pet } from "../../data/mockData";
 import { Button } from "../../components/ui/Button";
 import { Badge } from "../../components/ui/Badge";
@@ -41,13 +44,29 @@ export function SearchPage() {
   const [sortBy, setSortBy] = useState("newest");
   const [isSearching, setIsSearching] = useState(false);
 
-  // Fetch pets from API
+  // Geolocation states
+  const [userLocation, setUserLocation] = useState<{lat: number, lng: number, label: string} | null>(null);
+  const [searchRadius, setSearchRadius] = useState<number | null>(25);
+
+  // Fetch pets from API whenever location or radius changes
   useEffect(() => {
     const fetchPets = async () => {
       try {
         setLoading(true);
         setError(null);
-        const response = await axios.get("http://localhost:5000/api/pets");
+        
+        let response;
+        if (userLocation) {
+          // Always use proximity endpoint when user location is set.
+          // When "Anywhere" is selected (null), pass 'null' string so backend defaults to 5000 km.
+          const radiusParam = searchRadius ?? 'null';
+          const url = `http://localhost:5000/api/pets/nearby?lat=${userLocation.lat}&lng=${userLocation.lng}&radius=${radiusParam}&limit=50`;
+          console.log('[SearchPage] Fetching nearby:', url);
+          response = await axios.get(url);
+        } else {
+          // No location set: standard search, no distance info
+          response = await axios.get("http://localhost:5000/api/pets");
+        }
         
         // Transform data to match expected format
         const transformedPets = response.data.pets.map((pet: any) => ({
@@ -75,7 +94,9 @@ export function SearchPage() {
             contact: pet.shelter?.contact || "",
             email: pet.shelter?.email || "",
           },
-          adoptionStatus: (pet.adoptionStatus as any) || "available"
+          adoptionStatus: (pet.adoptionStatus as any) || "available",
+          // Map distanceKm from nearby search
+          distanceKm: pet.distanceKm,
         })) as Pet[];
         
         setPets(transformedPets);
@@ -88,7 +109,7 @@ export function SearchPage() {
     };
 
     fetchPets();
-  }, []);
+  }, [userLocation, searchRadius]); // Re-fetch when location/radius changes
 
   // Debounce search query
   useEffect(() => {
@@ -185,6 +206,10 @@ export function SearchPage() {
         break;
       case "oldest":
         result.reverse();
+        break;
+      case "nearest":
+        // Only works if distanceKm exists (which it does when userLocation is set)
+        result.sort((a, b) => (a.distanceKm || 9999) - (b.distanceKm || 9999));
         break;
       // 'newest' is default order
     }
@@ -392,6 +417,37 @@ export function SearchPage() {
       {/* Main Content */}
       {!loading && !error && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          
+          {/* Location Proximity Search */}
+          <div className="mb-10 p-8 rounded-[2rem] border-2 shadow-sm transition-all hover:shadow-md" style={{ background: "var(--color-surface)", borderColor: "var(--color-border)" }}>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 rounded-xl bg-indigo-100 text-indigo-600">
+                <MapPin className="w-6 h-6" />
+              </div>
+              <h3 className="text-xl font-bold" style={{ color: "var(--color-text)" }}>Find Pets Near You</h3>
+            </div>
+            
+            <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center">
+              <div className="flex-1 w-full">
+                <LocationSearchBar location={userLocation} setLocation={setUserLocation} />
+              </div>
+              <div className="flex-shrink-0 w-full lg:w-auto pt-2 lg:pt-0 border-t lg:border-t-0 lg:border-l border-gray-100 lg:pl-6">
+                <RadiusFilter 
+                  radius={searchRadius} 
+                  setRadius={setSearchRadius} 
+                  disabled={!userLocation} 
+                />
+              </div>
+            </div>
+            
+            {!userLocation && (
+              <div className="mt-4 text-xs italic text-gray-400 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+                Select a location to enable distance filtering
+              </div>
+            )}
+          </div>
+
         {/* Results Header */}
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-4">
@@ -447,6 +503,7 @@ export function SearchPage() {
                   color: "var(--color-text)",
                 }}
               >
+                {userLocation && <option value="nearest">Nearest First</option>}
                 <option value="newest">Newest First</option>
                 <option value="oldest">Oldest First</option>
                 <option value="name">Name (A-Z)</option>
@@ -521,7 +578,7 @@ export function SearchPage() {
                       exit={{ opacity: 0, scale: 0.9 }}
                       transition={{ duration: 0.3, delay: index * 0.05 }}
                     >
-                      <PetCard pet={pet} index={0} variant="compact" showLocation={false} />
+                      <PetCard pet={pet} index={0} variant="compact" showLocation={true} />
                     </motion.div>
                   ))}
                 </AnimatePresence>

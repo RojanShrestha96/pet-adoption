@@ -93,10 +93,15 @@ export function AdoptionInfoModal({
 
   const [household, setHousehold] = useState<AdopterHousehold>({
     homeType: "",
+    housing: { type: "", landlordPermission: false },
     rentOwn: "",
     landlordPermission: [],
     hasChildren: false,
+    childrenAges: [],
     childrenDetails: "",
+    hasDogs: false,
+    hasCats: false,
+    hasSmallAnimals: false,
     existingPets: "",
     hasFencedYard: false,
     safeEnvironment: false,
@@ -107,6 +112,7 @@ export function AdoptionInfoModal({
 
   const [lifestyle, setLifestyle] = useState<AdopterLifestyle>({
     activityLevel: "",
+    monthlyPetBudget: "",
     hoursAwayPerDay: undefined,
     experienceLevel: "",
     dailyRoutine: "",
@@ -196,7 +202,7 @@ export function AdoptionInfoModal({
         showToast("Please select your home type.", "error");
         return false;
       }
-      if (!household.rentOwn) {
+      if (!household.housing?.type && !household.rentOwn) {
         showToast("Please indicate whether you rent or own.", "error");
         return false;
       }
@@ -366,27 +372,46 @@ export function AdoptionInfoModal({
               background: "var(--color-card)",
               color: "var(--color-text)",
             }}
-            value={household.rentOwn ?? ""}
-            onChange={(e) => setHousehold({ ...household, rentOwn: e.target.value })}
+            value={household.housing?.type || household.rentOwn || ""}
+            onChange={(e) => {
+              const val = e.target.value;
+              setHousehold({
+                ...household,
+                housing: { ...household.housing, type: val },
+                rentOwn: val // Keep legacy in-sync just in case
+              });
+            }}
           >
             <option value="">Select</option>
             <option value="rent">Rent</option>
             <option value="own">Own</option>
-            <option value="live with family">Live with family</option>
+            <option value="live-with-family">Live with family</option>
           </select>
         </div>
       </div>
 
-      {household.rentOwn === "rent" && (
-        <FileUpload
-          label="Landlord Permission Letter"
-          files={household.landlordPermission ?? []}
-          onChange={(files) => setHousehold({ ...household, landlordPermission: files })}
-          maxFiles={1}
-        />
+      {(household.housing?.type === "rent" || household.rentOwn === "rent") && (
+        <div className="space-y-4">
+          <ToggleSwitch
+            checked={household.housing?.landlordPermission || false}
+            onChange={(v) =>
+              setHousehold({
+                ...household,
+                housing: { ...household.housing, landlordPermission: v },
+              })
+            }
+            label="I have explicit permission from my landlord to keep a pet."
+          />
+          <FileUpload
+            label="Landlord Permission Letter (Optional)"
+            files={household.landlordPermission ?? []}
+            onChange={(files) => setHousehold({ ...household, landlordPermission: files })}
+            maxFiles={1}
+          />
+        </div>
       )}
 
-      <div className="space-y-3">
+      <div className="space-y-4">
         <ToggleSwitch
           checked={household.hasChildren ?? false}
           onChange={(v) => setHousehold({ ...household, hasChildren: v })}
@@ -394,13 +419,43 @@ export function AdoptionInfoModal({
           description="If yes, we'll check pet compatibility"
         />
         {household.hasChildren && (
-          <Input
-            label="Children Details"
-            placeholder="Ages and number of children"
-            value={household.childrenDetails ?? ""}
-            onChange={(e) => setHousehold({ ...household, childrenDetails: e.target.value })}
-            fullWidth
-          />
+          <div className="pl-4 border-l-2" style={{ borderColor: "var(--color-border)" }}>
+            <label className="block text-sm font-medium mb-3" style={{ color: "var(--color-text)" }}>
+              Children's Ages (Select all that apply)
+            </label>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              {[
+                { id: "infant", label: "Infant (0-2)" },
+                { id: "toddler", label: "Toddler (3-5)" },
+                { id: "school-age", label: "School Age (6-12)" },
+                { id: "teen", label: "Teen (13+)" },
+              ].map((age) => (
+                <label key={age.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    style={{ accentColor: "var(--color-primary)" }}
+                    className="w-4 h-4 rounded"
+                    checked={household.childrenAges?.includes(age.id) ?? false}
+                    onChange={(e) => {
+                      const ages = household.childrenAges || [];
+                      const newAges = e.target.checked
+                        ? [...ages, age.id]
+                        : ages.filter((a) => a !== age.id);
+                      setHousehold({ ...household, childrenAges: newAges });
+                    }}
+                  />
+                  {age.label}
+                </label>
+              ))}
+            </div>
+            <Input
+              label="Additional Details"
+              placeholder="Any specific child routines?"
+              value={household.childrenDetails ?? ""}
+              onChange={(e) => setHousehold({ ...household, childrenDetails: e.target.value })}
+              fullWidth
+            />
+          </div>
         )}
         <ToggleSwitch
           checked={household.hasFencedYard ?? false}
@@ -424,10 +479,27 @@ export function AdoptionInfoModal({
         />
       </div>
 
-      <div>
-        <label className="block text-sm font-medium mb-2" style={{ color: "var(--color-text)" }}>
-          Existing Pets
+      <div className="space-y-4">
+        <label className="block text-sm font-medium" style={{ color: "var(--color-text)" }}>
+          Existing Pets in the Home
         </label>
+        <div className="grid grid-cols-2 gap-3">
+          <ToggleSwitch
+            checked={household.hasDogs ?? false}
+            onChange={(v) => setHousehold({ ...household, hasDogs: v })}
+            label="Dogs"
+          />
+          <ToggleSwitch
+            checked={household.hasCats ?? false}
+            onChange={(v) => setHousehold({ ...household, hasCats: v })}
+            label="Cats"
+          />
+          <ToggleSwitch
+            checked={household.hasSmallAnimals ?? false}
+            onChange={(v) => setHousehold({ ...household, hasSmallAnimals: v })}
+            label="Small Animals"
+          />
+        </div>
         <textarea
           className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none transition-colors"
           style={{
@@ -436,7 +508,7 @@ export function AdoptionInfoModal({
             color: "var(--color-text)",
           }}
           rows={2}
-          placeholder="List any pets you currently have (or leave blank)"
+          placeholder="Additional details about your pets (ages, personalities, etc.)"
           value={household.existingPets ?? ""}
           onChange={(e) => setHousehold({ ...household, existingPets: e.target.value })}
         />
@@ -562,6 +634,32 @@ export function AdoptionInfoModal({
           value={lifestyle.dailyRoutine ?? ""}
           onChange={(e) => setLifestyle({ ...lifestyle, dailyRoutine: e.target.value })}
         />
+      </div>
+
+      {/* Monthly Budget */}
+      <div>
+        <label className="block text-sm font-medium mb-2" style={{ color: "var(--color-text)" }}>
+          Estimated Monthly Pet Budget
+        </label>
+        <select
+          className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none transition-colors"
+          style={{
+            borderColor: "var(--color-border)",
+            background: "var(--color-card)",
+            color: "var(--color-text)",
+          }}
+          value={lifestyle.monthlyPetBudget ?? ""}
+          onChange={(e) => setLifestyle({ ...lifestyle, monthlyPetBudget: e.target.value })}
+        >
+          <option value="">Select a budget range</option>
+          <option value="under-5000">Under Rs 5,000</option>
+          <option value="5000-10000">Rs 5,000 – 10,000</option>
+          <option value="10000-20000">Rs 10,000 – 20,000</option>
+          <option value="20000+">Rs 20,000+</option>
+        </select>
+        <p className="text-xs mt-1.5" style={{ color: "var(--color-text-light)" }}>
+          Covers food, treats, toys, basic grooming, and routine veterinary care.
+        </p>
       </div>
     </div>
   );

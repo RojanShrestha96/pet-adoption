@@ -5,12 +5,16 @@ interface User {
   _id?: string; // MongoDB ID
   email: string;
   name: string;
-  phone?: string;
+   phone?: string;
   bio?: string;
   address?: string;
+  profileImage?: string;
+  logo?: string;
   type: "adopter" | "shelter" | "admin";
   role?: "super_admin" | "admin" | "moderator";
   theme?: string;
+  status: "active" | "warned" | "suspended" | "banned";
+  statusReason?: string;
   favoritePets?: any[]; // Using any[] for now to avoid circular dependency
   adoptedPets?: any[];
   applicationsSent?: any[];
@@ -54,6 +58,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       if (parsedUser.theme) {
         changeTheme(parsedUser.theme);
       }
+      // Immediately verify status with the server to catch bans/suspensions
+      refreshUser();
     }
     setIsLoading(false);
   }, []);
@@ -87,6 +93,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         const data = await response.json();
         setUser(data.user);
         localStorage.setItem("user", JSON.stringify(data.user));
+      } else if (response.status === 401 || response.status === 403) {
+        // If forbidden or unauthorized (e.g. banned mid-session), force logout
+        const errorData = await response.json();
+        if (errorData.isBanned) {
+          logout();
+          window.location.href = '/login?error=banned&reason=' + encodeURIComponent(errorData.message);
+        }
       }
     } catch (err) {
       console.error("Failed to refresh user:", err);

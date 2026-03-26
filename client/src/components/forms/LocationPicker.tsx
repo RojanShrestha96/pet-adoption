@@ -39,7 +39,7 @@ interface LocationPickerProps {
 }
 
 // Component to handle marker drag and click events
-const DraggableMarker = ({ position, setPosition, onLocationSelect }: any) => {
+const DraggableMarker = ({ position, setPosition, onLocationSelect, setAddress }: any) => {
   const markerRef = useRef<L.Marker>(null);
 
   const eventHandlers = React.useMemo(
@@ -55,6 +55,7 @@ const DraggableMarker = ({ position, setPosition, onLocationSelect }: any) => {
           )
             .then((res) => res.json())
             .then((data) => {
+              setAddress(data.display_name);
               onLocationSelect({
                 lat: latLng.lat,
                 lng: latLng.lng,
@@ -73,7 +74,7 @@ const DraggableMarker = ({ position, setPosition, onLocationSelect }: any) => {
         }
       },
     }),
-    [onLocationSelect, setPosition]
+    [onLocationSelect, setPosition, setAddress]
   );
 
   return (
@@ -87,7 +88,7 @@ const DraggableMarker = ({ position, setPosition, onLocationSelect }: any) => {
 };
 
 // Component to handle map clicks to move marker
-const MapClickHandler = ({ setPosition, onLocationSelect }: any) => {
+const MapClickHandler = ({ setPosition, onLocationSelect, setAddress }: any) => {
   useMapEvents({
     click(e) {
       setPosition(e.latlng);
@@ -96,6 +97,7 @@ const MapClickHandler = ({ setPosition, onLocationSelect }: any) => {
       )
         .then((res) => res.json())
         .then((data) => {
+          setAddress(data.display_name);
           onLocationSelect({
             lat: e.latlng.lat,
             lng: e.latlng.lng,
@@ -263,10 +265,12 @@ export const LocationPicker: React.FC<LocationPickerProps> = ({
             position={position}
             setPosition={setPosition}
             onLocationSelect={onLocationSelect}
+            setAddress={setAddress}
           />
           <MapClickHandler
             setPosition={setPosition}
             onLocationSelect={onLocationSelect}
+            setAddress={setAddress}
           />
           <RecenterMap
             position={position}

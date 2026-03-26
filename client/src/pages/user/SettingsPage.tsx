@@ -69,7 +69,9 @@ export function SettingsPage() {
     establishedDate: "",
     contactPerson: "",
     theme: "friendly",
+
     isVerified: false,
+    logo: "",
   });
 
   const [locationData, setLocationData] = useState({
@@ -127,13 +129,23 @@ export function SettingsPage() {
               : "",
             contactPerson: data.contactPerson || "",
             theme: data.theme || "friendly",
+
             isVerified: data.isVerified || false,
+            logo: data.logo || "",
           });
 
           if (data.location) {
+            let lat = data.location.lat;
+            let lng = data.location.lng;
+            
+            if (data.location.type === 'Point' && data.location.coordinates) {
+               lng = data.location.coordinates[0];
+               lat = data.location.coordinates[1];
+            }
+
             setLocationData({
-              lat: data.location.lat || "",
-              lng: data.location.lng || "",
+              lat: lat || "",
+              lng: lng || "",
               formattedAddress: data.location.formattedAddress || "",
             });
           }
@@ -171,12 +183,13 @@ export function SettingsPage() {
         name: formData.shelterName,
         theme: currentTheme,
         location: {
-          lat: parseFloat(locationData.lat) || 0,
-          lng: parseFloat(locationData.lng) || 0,
+          lat: locationData.lat ? parseFloat(locationData.lat) : null,
+          lng: locationData.lng ? parseFloat(locationData.lng) : null,
           formattedAddress: locationData.formattedAddress,
         },
         preferences,
         documentation: documents,
+        logo: formData.logo,
       };
 
       const response = await fetch("http://localhost:5000/api/shelter/me", {
@@ -240,6 +253,41 @@ export function SettingsPage() {
     } catch (error) {
       console.error("Failed to change password:", error);
       showToast("Failed to change password", "error");
+    }
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("File size too large. Max 5MB allowed.", "error");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("images", file);
+
+    try {
+      showToast("Uploading logo...", "info");
+      const response = await fetch("http://localhost:5000/api/upload/images", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error("Upload failed");
+
+      const data = await response.json();
+      const logoUrl = data.urls[0];
+      
+      setFormData(prev => ({ ...prev, logo: logoUrl }));
+      showToast("Logo uploaded successfully", "success");
+    } catch (error) {
+      console.error("Error uploading logo:", error);
+      showToast("Failed to upload logo", "error");
     }
   };
 
@@ -462,17 +510,24 @@ export function SettingsPage() {
                     </h2>
 
                     <div className="flex items-center gap-6 mb-8">
+
                       <div className="relative group cursor-pointer">
                         <div className="w-24 h-24 rounded-full bg-gray-200 overflow-hidden border-4 border-white shadow-md">
                           <img
-                            src="https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=200"
+                            src={formData.logo || "https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=200"}
                             alt="Logo"
                             className="w-full h-full object-cover"
                           />
                         </div>
-                        <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-medium">
+                        <label className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-medium cursor-pointer">
                           Change
-                        </div>
+                          <input 
+                            type="file" 
+                            className="hidden" 
+                            accept="image/*"
+                            onChange={handleLogoUpload}
+                          />
+                        </label>
                       </div>
                       <div>
                         <div className="flex items-center gap-2">

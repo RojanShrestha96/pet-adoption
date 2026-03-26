@@ -72,11 +72,25 @@ interface FormData {
   // Medical Documents
   medicalDocuments: File[];
 
-  // Personality
+  // Compatibility (string enums match updated Pet model)
   temperament: string[];
-  goodWithKids: boolean;
-  goodWithPets: boolean;
-  apartmentFriendly: boolean;
+  goodWithKids: string; // "yes" | "with-supervision" | "no"
+  goodWithPets: string; // "yes" | "cats-only" | "dogs-only" | "no"
+
+  // Behavioural Assessment — shelter-entered, never inferred from breed/size
+  energyScore: string;         // "1"–"5"
+  separationAnxiety: string;   // "none" | "mild" | "moderate" | "severe"
+  attachmentStyle: string;     // "independent" | "moderate" | "velcro"
+  trainingDifficulty: string;  // "easy" | "moderate" | "challenging"
+  noiseLevel: string;          // "quiet" | "moderate" | "vocal"
+  sheddingLevel: string;       // "low" | "moderate" | "high"
+
+  // Environment Requirements
+  idealEnvironment: string;    // "indoor-only" | "indoor-with-outdoor-access" | "garden-required" | "rural-preferred"
+  minSpaceSqm: string;         // number as string
+
+  // Financial
+  estimatedMonthlyCost: string; // number as string
 }
 
 const initialFormData: FormData = {
@@ -102,9 +116,17 @@ const initialFormData: FormData = {
   otherConditions: [],
   medicalDocuments: [],
   temperament: [],
-  goodWithKids: false,
-  goodWithPets: false,
-  apartmentFriendly: false,
+  goodWithKids: "yes",
+  goodWithPets: "yes",
+  energyScore: "",
+  separationAnxiety: "",
+  attachmentStyle: "",
+  trainingDifficulty: "",
+  noiseLevel: "",
+  sheddingLevel: "",
+  idealEnvironment: "",
+  minSpaceSqm: "0",
+  estimatedMonthlyCost: "",
 };
 
 export function AddPetPage() {
@@ -294,7 +316,24 @@ export function AddPetPage() {
           temperament: formData.temperament,
           goodWithKids: formData.goodWithKids,
           goodWithPets: formData.goodWithPets,
-          apartmentFriendly: formData.apartmentFriendly,
+          // Behavioural Assessment
+          behaviour: {
+            energyScore: formData.energyScore ? Number(formData.energyScore) : undefined,
+            separationAnxiety: formData.separationAnxiety || undefined,
+            attachmentStyle: formData.attachmentStyle || undefined,
+            trainingDifficulty: formData.trainingDifficulty || undefined,
+            noiseLevel: formData.noiseLevel || undefined,
+            sheddingLevel: formData.sheddingLevel || undefined,
+          },
+          // Environment Requirements
+          environment: {
+            idealEnvironment: formData.idealEnvironment || undefined,
+            minSpaceSqm: formData.minSpaceSqm ? Number(formData.minSpaceSqm) : 0,
+          },
+          // Financial
+          financial: {
+            estimatedMonthlyCost: formData.estimatedMonthlyCost ? Number(formData.estimatedMonthlyCost) : undefined,
+          },
         }),
       });
 
@@ -658,43 +697,175 @@ export function AddPetPage() {
                       </div>
                     </div>
 
-                    {/* Compatibility */}
+                    {/* Compatibility — string enums */}
                     <div className="mt-6">
                       <label className="block text-sm font-medium text-gray-700 mb-3">
                         Compatibility
                       </label>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        {[
-                          { key: "goodWithKids", label: "Good with Kids" },
-                          { key: "goodWithPets", label: "Good with Pets" },
-                          {
-                            key: "apartmentFriendly",
-                            label: "Apartment Friendly",
-                          },
-                        ].map((item) => (
-                          <button
-                            key={item.key}
-                            type="button"
-                            onClick={() =>
-                              handleInputChange(
-                                item.key as keyof FormData,
-                                !formData[item.key as keyof FormData]
-                              )
-                            }
-                            className={`p-4 rounded-xl border-2 transition-all ${
-                              formData[item.key as keyof FormData]
-                                ? "border-green-500 bg-green-50 text-green-700"
-                                : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
-                            }`}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1.5">Good with Kids</label>
+                          <select
+                            className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-[var(--color-primary)] focus:outline-none transition-colors bg-white text-sm"
+                            value={formData.goodWithKids}
+                            onChange={(e) => handleInputChange("goodWithKids", e.target.value)}
                           >
-                            <div className="flex items-center gap-2">
-                              {formData[item.key as keyof FormData] && (
-                                <CheckCircle2 className="w-4 h-4 text-green-500" />
-                              )}
-                              <span className="font-medium">{item.label}</span>
-                            </div>
-                          </button>
-                        ))}
+                            <option value="yes">Yes — great with children</option>
+                            <option value="with-supervision">With supervision</option>
+                            <option value="no">Not recommended with children</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1.5">Good with Other Pets</label>
+                          <select
+                            className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-[var(--color-primary)] focus:outline-none transition-colors bg-white text-sm"
+                            value={formData.goodWithPets}
+                            onChange={(e) => handleInputChange("goodWithPets", e.target.value)}
+                          >
+                            <option value="yes">Yes — all animals</option>
+                            <option value="cats-only">Cats only</option>
+                            <option value="dogs-only">Dogs only</option>
+                            <option value="no">No other animals</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Behavioural Assessment — required for scoring engine */}
+                    <div className="mt-8 pt-6 border-t border-gray-100">
+                      <div className="mb-4">
+                        <h3 className="text-base font-semibold text-gray-800">Behavioural Assessment</h3>
+                        <p className="text-xs text-amber-600 mt-1">⚠️ These fields power the compatibility scoring engine. Please fill them in based on direct observation — never assume from breed or size.</p>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1.5">Energy Level (1 = very low, 5 = very high)</label>
+                          <select
+                            className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-[var(--color-primary)] focus:outline-none transition-colors bg-white text-sm"
+                            value={formData.energyScore}
+                            onChange={(e) => handleInputChange("energyScore", e.target.value)}
+                          >
+                            <option value="">Select energy level</option>
+                            <option value="1">1 — Very low energy, mostly resting</option>
+                            <option value="2">2 — Low energy, short walks fine</option>
+                            <option value="3">3 — Moderate energy, daily walks needed</option>
+                            <option value="4">4 — High energy, active play daily</option>
+                            <option value="5">5 — Very high energy, 2+ hrs exercise daily</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1.5">Separation Anxiety</label>
+                          <select
+                            className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-[var(--color-primary)] focus:outline-none transition-colors bg-white text-sm"
+                            value={formData.separationAnxiety}
+                            onChange={(e) => handleInputChange("separationAnxiety", e.target.value)}
+                          >
+                            <option value="">Select level</option>
+                            <option value="none">None — content when alone</option>
+                            <option value="mild">Mild — some restlessness (&lt;2hr OK)</option>
+                            <option value="moderate">Moderate — needs support after 2–3hrs</option>
+                            <option value="severe">Severe — cannot be left alone without distress</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1.5">Attachment Style</label>
+                          <select
+                            className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-[var(--color-primary)] focus:outline-none transition-colors bg-white text-sm"
+                            value={formData.attachmentStyle}
+                            onChange={(e) => handleInputChange("attachmentStyle", e.target.value)}
+                          >
+                            <option value="">Select style</option>
+                            <option value="independent">Independent — content without constant contact</option>
+                            <option value="moderate">Moderate — enjoys company but manages alone</option>
+                            <option value="velcro">Velcro — needs near-constant human presence</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1.5">Training Difficulty (individual assessment)</label>
+                          <select
+                            className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-[var(--color-primary)] focus:outline-none transition-colors bg-white text-sm"
+                            value={formData.trainingDifficulty}
+                            onChange={(e) => handleInputChange("trainingDifficulty", e.target.value)}
+                          >
+                            <option value="">Select difficulty</option>
+                            <option value="easy">Easy — responds well, good manners</option>
+                            <option value="moderate">Moderate — needs consistent training</option>
+                            <option value="challenging">Challenging — requires experienced handler</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1.5">Noise Level</label>
+                          <select
+                            className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-[var(--color-primary)] focus:outline-none transition-colors bg-white text-sm"
+                            value={formData.noiseLevel}
+                            onChange={(e) => handleInputChange("noiseLevel", e.target.value)}
+                          >
+                            <option value="">Select noise level</option>
+                            <option value="quiet">Quiet — rarely vocalises</option>
+                            <option value="moderate">Moderate — occasional barking/meowing</option>
+                            <option value="vocal">Vocal — frequently vocalises</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1.5">Shedding Level</label>
+                          <select
+                            className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-[var(--color-primary)] focus:outline-none transition-colors bg-white text-sm"
+                            value={formData.sheddingLevel}
+                            onChange={(e) => handleInputChange("sheddingLevel", e.target.value)}
+                          >
+                            <option value="">Select shedding level</option>
+                            <option value="low">Low — minimal shedding</option>
+                            <option value="moderate">Moderate — regular brushing needed</option>
+                            <option value="high">High — frequent grooming required</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Environment & Financial */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1.5">Ideal Environment</label>
+                          <select
+                            className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-[var(--color-primary)] focus:outline-none transition-colors bg-white text-sm"
+                            value={formData.idealEnvironment}
+                            onChange={(e) => handleInputChange("idealEnvironment", e.target.value)}
+                          >
+                            <option value="">Select environment</option>
+                            <option value="indoor-only">Indoor only</option>
+                            <option value="indoor-with-outdoor-access">Indoor with outdoor access</option>
+                            <option value="garden-required">Garden required</option>
+                            <option value="rural-preferred">Rural / suburban preferred</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1.5">Min Living Space (sqm, 0=none)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-[var(--color-primary)] focus:outline-none transition-colors bg-white text-sm"
+                            value={formData.minSpaceSqm}
+                            onChange={(e) => handleInputChange("minSpaceSqm", e.target.value)}
+                            placeholder="e.g. 40"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1.5">Est. Monthly Cost (£)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-[var(--color-primary)] focus:outline-none transition-colors bg-white text-sm"
+                            value={formData.estimatedMonthlyCost}
+                            onChange={(e) => handleInputChange("estimatedMonthlyCost", e.target.value)}
+                            placeholder="e.g. 100"
+                          />
+                        </div>
                       </div>
                     </div>
                   </Card>

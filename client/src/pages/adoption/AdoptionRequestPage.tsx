@@ -14,6 +14,7 @@ import { Input } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
 import { FileUpload } from "../../components/forms/FileUpload";
 import { ToggleSwitch } from "../../components/ui/ToggleSwitch";
+import axios from "axios";
 import { mockPets } from "../../data/mockData";
 import { ProgressStepper } from "../../components/common/ProgressStepper";
 import { ConfirmationDialog } from "../../components/common/ConfirmationDialog";
@@ -25,6 +26,18 @@ export function AdoptionRequestPage() {
   const pet = mockPets.find((p) => p.id === petId);
   const [currentStep, setCurrentStep] = useState(0);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [adopterProfileSnap, setAdopterProfileSnap] = useState<any>(null);
+  
+  // Fetch user profile to snap it for application
+  useState(() => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      axios.get("http://localhost:5000/api/auth/adopter-profile", {
+        headers: { Authorization: `Bearer ${token}` }
+      }).then(res => setAdopterProfileSnap(res.data)).catch(console.error);
+    }
+  });
+
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -37,17 +50,20 @@ export function AdoptionRequestPage() {
     homeType: "",
     rentOwn: "",
     landlordPermission: [] as string[],
+    landlordPermissionCoversPetType: false,
     hasChildren: false,
     childrenDetails: "",
     existingPets: "",
-    dailyRoutine: "",
+    typicalWeekdayRoutine: "",
+    emergencyCarePlan: "",
     hasFencedYard: false,
     safeEnvironment: false,
     medicalAffordability: false,
     annualVaccinations: false,
-    whyAdopt: "",
+    specificPetMotivation: "",
+    monthlyBudgetEstimate: "",
+    lifeChangesExplanation: "",
     petExperience: "",
-    adoptionTimeline: "",
     readyForHomeVisit: false,
     handleVetVisits: false,
     proofOfResidence: [] as string[],
@@ -91,6 +107,15 @@ export function AdoptionRequestPage() {
   };
   const handleFinalSubmit = async () => {
     setIsSubmitting(true);
+    
+    // In a real implementation this would POST to /api/adoption-applications
+    const mockPayload = {
+      ...formData,
+      profileSnapshot: adopterProfileSnap,
+      profileVersionAtSubmission: adopterProfileSnap?.profileVersion || 1
+    };
+    console.log("Submitting Application Payload:", mockPayload);
+    
     await new Promise((resolve) => setTimeout(resolve, 1500));
     setIsSubmitting(false);
     setShowConfirm(false);
@@ -462,17 +487,27 @@ export function AdoptionRequestPage() {
                     </div>
                   </div>
                   {formData.rentOwn === "rent" && (
-                    <FileUpload
-                      label="Landlord Permission Letter"
-                      files={formData.landlordPermission}
-                      onChange={(files) =>
-                        setFormData({
-                          ...formData,
-                          landlordPermission: files,
-                        })
-                      }
-                      maxFiles={1}
-                    />
+                    <div className="space-y-4">
+                      <FileUpload
+                        label={`Landlord Permission Letter (Must explicitly allow ${pet.breed} or similar size)`}
+                        files={formData.landlordPermission}
+                        onChange={(files) =>
+                          setFormData({
+                            ...formData,
+                            landlordPermission: files,
+                          })
+                        }
+                        maxFiles={1}
+                      />
+                      <ToggleSwitch
+                        checked={formData.landlordPermissionCoversPetType}
+                        onChange={(checked) =>
+                          setFormData({ ...formData, landlordPermissionCoversPetType: checked })
+                        }
+                        label={`Does permission cover ${pet.breed}?`}
+                        description="Check if letter explicitly names the pet breed or general classification"
+                      />
+                    </div>
                   )}
                   <div className="space-y-4">
                     <ToggleSwitch
@@ -535,7 +570,7 @@ export function AdoptionRequestPage() {
                         color: "var(--color-text)",
                       }}
                     >
-                      Daily Routine
+                      Typical Weekday Routine *
                     </label>
                     <textarea
                       className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none transition-colors"
@@ -545,12 +580,39 @@ export function AdoptionRequestPage() {
                         color: "var(--color-text)",
                       }}
                       rows={3}
-                      placeholder="Describe your typical daily schedule"
-                      value={formData.dailyRoutine}
+                      placeholder="Describe your typical weekday schedule, including away-from-home hours"
+                      value={formData.typicalWeekdayRoutine}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          dailyRoutine: e.target.value,
+                          typicalWeekdayRoutine: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label
+                      className="block text-sm font-medium mb-2"
+                      style={{
+                        color: "var(--color-text)",
+                      }}
+                    >
+                      Emergency Care Plan *
+                    </label>
+                    <textarea
+                      className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none transition-colors"
+                      style={{
+                        borderColor: "var(--color-border)",
+                        background: "var(--color-card)",
+                        color: "var(--color-text)",
+                      }}
+                      rows={3}
+                      placeholder="Who will care for the pet during emergencies or travel?"
+                      value={formData.emergencyCarePlan}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          emergencyCarePlan: e.target.value,
                         })
                       }
                     />
@@ -618,7 +680,7 @@ export function AdoptionRequestPage() {
                         color: "var(--color-text)",
                       }}
                     >
-                      Why do you want to adopt this pet? *
+                      What specific motivation draws you to this pet? *
                     </label>
                     <textarea
                       className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none transition-colors"
@@ -627,17 +689,77 @@ export function AdoptionRequestPage() {
                         background: "var(--color-card)",
                         color: "var(--color-text)",
                       }}
-                      rows={5}
-                      placeholder="Tell us about your motivation and what you can offer"
-                      value={formData.whyAdopt}
+                      rows={4}
+                      placeholder="Tell us why this specific pet caught your eye and how they fit into your life"
+                      value={formData.specificPetMotivation}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          whyAdopt: e.target.value,
+                          specificPetMotivation: e.target.value,
                         })
                       }
                     />
                   </div>
+                  <div>
+                    <label
+                      className="block text-sm font-medium mb-2"
+                      style={{
+                        color: "var(--color-text)",
+                      }}
+                    >
+                      Monthly Budget Estimate *
+                    </label>
+                    <select
+                      className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none transition-colors"
+                      style={{
+                        borderColor: "var(--color-border)",
+                        background: "var(--color-card)",
+                        color: "var(--color-text)",
+                      }}
+                      value={formData.monthlyBudgetEstimate}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          monthlyBudgetEstimate: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="">Select your estimated monthly budget</option>
+                      <option value="under-1k">Under Rs 1,000</option>
+                      <option value="1k-3k">Rs 1,000 - 3,000</option>
+                      <option value="3k-5k">Rs 3,000 - 5,000</option>
+                      <option value="over-5k">Over Rs 5,000</option>
+                    </select>
+                  </div>
+                  {adopterProfileSnap?.lifestyle?.upcomingLifeChanges?.length > 0 && (
+                    <div>
+                      <label
+                        className="block text-sm font-medium mb-2"
+                        style={{
+                          color: "var(--color-text)",
+                        }}
+                      >
+                        Your profile indicates you have upcoming life changes planned. Please describe how your new pet fits into these plans. *
+                      </label>
+                      <textarea
+                        className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none transition-colors"
+                        style={{
+                          borderColor: "var(--color-border)",
+                          background: "var(--color-card)",
+                          color: "var(--color-text)",
+                        }}
+                        rows={3}
+                        placeholder="E.g., Moving soon, expecting a baby, job change"
+                        value={formData.lifeChangesExplanation}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            lifeChangesExplanation: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  )}
                   <div>
                     <label
                       className="block text-sm font-medium mb-2"
@@ -654,7 +776,7 @@ export function AdoptionRequestPage() {
                         background: "var(--color-card)",
                         color: "var(--color-text)",
                       }}
-                      rows={4}
+                      rows={3}
                       placeholder="Describe your experience with pets"
                       value={formData.petExperience}
                       onChange={(e) =>
@@ -665,18 +787,6 @@ export function AdoptionRequestPage() {
                       }
                     />
                   </div>
-                  <Input
-                    label="Adoption Timeline"
-                    placeholder="When are you planning to adopt?"
-                    value={formData.adoptionTimeline}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        adoptionTimeline: e.target.value,
-                      })
-                    }
-                    fullWidth
-                  />
                   <div className="space-y-3">
                     <ToggleSwitch
                       checked={formData.readyForHomeVisit}

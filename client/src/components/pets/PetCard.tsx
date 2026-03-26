@@ -111,8 +111,17 @@ export function PetCard({
                   color: "var(--color-text-light)",
                 }}
               >
-                <MapPin className="w-4 h-4" />
-                <span>{formatAddress(pet.location)}</span>
+                <MapPin className="w-4 h-4 flex-shrink-0" />
+                <span className="truncate">
+                  {pet.distanceKm !== undefined 
+                    ? (pet.distanceKm < 0.1 
+                        ? `Nearby • ${pet.shelter?.name || 'Shelter'}` 
+                        : pet.distanceKm < 1 
+                          ? `< 1 km away • ${pet.shelter?.name || 'Shelter'}`
+                          : `${pet.distanceKm} km away • ${pet.shelter?.name || 'Shelter'}`)
+                    : formatAddress(pet.location)
+                  }
+                </span>
               </div>
             )}
 

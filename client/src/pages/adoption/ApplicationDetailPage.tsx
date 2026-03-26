@@ -4,7 +4,7 @@ import {
   ArrowLeft, CheckCircle, XCircle, FileText, User, Home, Phone, Mail,
   Clock, Dog, Cat, MapPin, Heart, CalendarCheck, ChevronDown, Eye,
   Loader2, AlertCircle, AlertTriangle, Activity, Shield, ExternalLink,
-  Zap, TrendingUp, PawPrint, Info,
+  Zap, TrendingUp, PawPrint, Info, RefreshCw, Sparkles,
 } from "lucide-react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { ShelterSidebar } from "../../components/layout/ShelterSidebar";
@@ -15,13 +15,9 @@ import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { Modal } from "../../components/ui/Modal";
 import { useToast } from "../../components/ui/Toast";
+import { useSettings } from "../../contexts/SettingsContext";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-interface CompatibilityFactor {
-  name: string; score: number; maxScore: number; isPenalty: boolean;
-  weight: "High" | "Medium" | "Low"; colorClass: "green" | "amber" | "red";
-}
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const buildWorkflowSteps = (app: any) => {
   if (!app) return [
@@ -70,44 +66,7 @@ const getDisplayStatus = (app: any) => {
   return app.status;
 };
 
-const computeCompatibilityBreakdown = (app: any): { factors: CompatibilityFactor[]; finalScore: number } => {
-  if (!app) return { factors: [], finalScore: 0 };
-  const f: CompatibilityFactor[] = [];
-
-  // Home Type (max 20)
-  let h = 8;
-  if (app.household?.homeType === "house") h += 7; else if (app.household?.homeType === "apartment") h += 3;
-  if (app.household?.rentOwn === "own") h += 5;
-  h = Math.min(h, 20);
-  f.push({ name: "Home Type", score: h, maxScore: 20, isPenalty: false, weight: "High", colorClass: h >= 16 ? "green" : h >= 10 ? "amber" : "red" });
-
-  // Experience (max 20)
-  const el = (app.adoptionIntent?.petExperience || "").length;
-  const e = Math.min(20, Math.max(5, Math.round(el / 10)));
-  f.push({ name: "Experience", score: e, maxScore: 20, isPenalty: false, weight: "High", colorClass: e >= 16 ? "green" : e >= 10 ? "amber" : "red" });
-
-  // Children
-  if (app.household?.hasChildren) {
-    f.push({ name: "Children in Home", score: -5, maxScore: 0, isPenalty: true, weight: "Medium", colorClass: "amber" });
-  } else {
-    f.push({ name: "Child-Free Home", score: 10, maxScore: 10, isPenalty: false, weight: "Medium", colorClass: "green" });
-  }
-
-  // Yard (max 20)
-  const y = app.household?.hasFencedYard ? 20 : (app.household?.homeType === "house" ? 10 : 5);
-  f.push({ name: "Outdoor Space", score: y, maxScore: 20, isPenalty: false, weight: "Medium", colorClass: y >= 16 ? "green" : y >= 10 ? "amber" : "red" });
-
-  // Lifestyle (max 20)
-  const r = (app.household?.dailyRoutine || "").toLowerCase();
-  const ls = r.includes("home") || r.includes("wfh") ? 20 : r.includes("part") || r.includes("flex") ? 16 : r.includes("full") ? 10 : 12;
-  f.push({ name: "Lifestyle Match", score: ls, maxScore: 20, isPenalty: false, weight: "High", colorClass: ls >= 16 ? "green" : ls >= 12 ? "amber" : "red" });
-
-  const posMax = f.filter(x => !x.isPenalty).reduce((s, x) => s + x.maxScore, 0);
-  const posSum = f.filter(x => !x.isPenalty).reduce((s, x) => s + x.score, 0);
-  const pen = f.filter(x => x.isPenalty).reduce((s, x) => s + x.score, 0);
-  const finalScore = Math.max(0, Math.min(100, Math.round(((posSum + pen) / posMax) * 100)));
-  return { factors: f, finalScore };
-};
+// Removed local computeCompatibilityBreakdown in favor of backend compatibility score
 
 const getRiskIndicators = (app: any) => {
   if (!app) return [];
@@ -203,12 +162,15 @@ export function ApplicationDetailPage() {
   const navigate = useNavigate();
   const { applicationId } = useParams();
   const { showToast } = useToast();
+  const { settings } = useSettings();
 
   const [application, setApplication] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({ applicant: true, documents: true, activity: false });
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({ aiInsights: true, petDetails: false, applicant: true, documents: true, activity: false, profileDelta: false });
+  const [regenerating, setRegenerating] = useState(false);
+  const [currentProfile, setCurrentProfile] = useState<any>(null);
   const [confirmModal, setConfirmModal] = useState<{ open: boolean; title: string; message: string; confirmLabel: string; danger: boolean; action: () => void }>({ open: false, title: "", message: "", confirmLabel: "Confirm", danger: false, action: () => {} });
 
   const confirm = (title: string, message: string, action: () => void, opts?: { confirmLabel?: string; danger?: boolean }) =>
@@ -227,11 +189,35 @@ export function ApplicationDetailPage() {
           ...(data.household?.landlordPermission || []).map((url: string, i: number) => ({ id: `land-${i}`, name: `Landlord Permission ${i + 1}`, url, status: data.documentStatus?.find((s: any) => s.url === url)?.status || "pending", uploadedAt: data.createdAt })),
         ];
         setApplication({ ...data, documents: docs });
+
+        // Fetch current profile for delta comparison
+        if (data.adopter?._id) {
+          try {
+            const profRes = await api.get(`/profiles/${data.adopter._id}`);
+            setCurrentProfile(profRes.data);
+          } catch (e) {
+            console.log("Could not fetch current profile for delta", e);
+          }
+        }
+
       } catch (err: any) { setError(err.response?.data?.message || "Failed to load"); }
       finally { setLoading(false); }
     };
     if (applicationId) load();
   }, [applicationId]);
+
+  const handleRegenerateAI = async () => {
+    try {
+      setRegenerating(true);
+      const { data } = await api.post(`/applications/${applicationId}/regenerate-insights`);
+      setApplication((p: any) => ({ ...p, aiInsights: data.aiInsights }));
+      showToast("AI Insights regenerated successfully", "success");
+    } catch (err: any) {
+      showToast(err.response?.data?.message || "Failed to regenerate insights", "error");
+    } finally {
+      setRegenerating(false);
+    }
+  };
 
   const updateStatus = async (newStatus: string) => {
     try {
@@ -267,7 +253,11 @@ export function ApplicationDetailPage() {
   const workflowSteps = buildWorkflowSteps(application);
   const displayStatus = getDisplayStatus(application);
   const currentStepIdx = workflowSteps.findIndex(s => s.key === displayStatus);
-  const { factors, finalScore } = computeCompatibilityBreakdown(application);
+  const compatibility = application.compatibilityScore || { factors: [], percentage: 0 };
+  const factors = compatibility.factors || [];
+  const finalScore = compatibility.percentage || 0;
+  const confidenceLevel = compatibility.confidenceLevel || "low";
+  const aiInsights = application.aiInsights?.shelter;
   const risks = getRiskIndicators(application);
   const docs = application.documents || [];
   const verifiedDocs = docs.filter((d: any) => d.status === "verified").length;
@@ -280,11 +270,30 @@ export function ApplicationDetailPage() {
   const activityLog = [
     { date: application.createdAt, label: "Application Submitted", icon: FileText, cls: "text-blue-500 bg-blue-50" },
     ...(application.status !== "pending" ? [{ date: application.updatedAt, label: `Status → ${(application.status || "").replace(/_/g, " ")}`, icon: Activity, cls: "text-violet-500 bg-violet-50" }] : []),
-    ...(application.meetAndGreet?.scheduledDate ? [{ date: application.meetAndGreet.scheduledDate, label: "Meet & Greet Scheduled", icon: CalendarCheck, cls: "text-green-500 bg-green-50" }] : []),
+    // V2.1 Issue 14: Fixed schema path — new path is confirmedSlot.date, legacy fallback to top-level scheduledDate
+    ...((application.meetAndGreet?.confirmedSlot?.date || application.scheduledDate) ? [{ date: application.meetAndGreet?.confirmedSlot?.date || application.scheduledDate, label: "Meet & Greet Scheduled", icon: CalendarCheck, cls: "text-green-500 bg-green-50" }] : []),
     ...(application.meetAndGreet?.completedAt ? [{ date: application.meetAndGreet.completedAt, label: "Meet & Greet Completed", icon: CheckCircle, cls: "text-green-600 bg-green-50" }] : []),
   ].filter(e => e.date).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   const colorMap = { green: { bar: "bg-green-500", text: "text-green-700" }, amber: { bar: "bg-amber-400", text: "text-amber-700" }, red: { bar: "bg-red-500", text: "text-red-600" } };
+
+  // Profile Delta Logic
+  const snapshot = application.profileSnapshot;
+  const buildDeltas = () => {
+    if (!snapshot || !currentProfile) return [];
+    const fields = [
+      { label: "Home Type", key: "homeType", old: snapshot.household?.homeType, new: currentProfile.household?.homeType },
+      { label: "Ownership", key: "ownershipStatus", old: snapshot.household?.ownershipStatus || snapshot.household?.rentOwn, new: currentProfile.household?.ownershipStatus || currentProfile.household?.rentOwn },
+      { label: "Existing Pets", key: "hasExistingPets", old: snapshot.household?.hasExistingPets?.toString(), new: currentProfile.household?.hasExistingPets?.toString() },
+      { label: "Children", key: "hasChildren", old: snapshot.household?.hasChildren?.toString(), new: currentProfile.household?.hasChildren?.toString() },
+      { label: "Activity Level", key: "activityLevel", old: snapshot.lifestyle?.activityLevel, new: currentProfile.lifestyle?.activityLevel },
+      { label: "Work Style", key: "workStyle", old: snapshot.lifestyle?.workStyle, new: currentProfile.lifestyle?.workStyle },
+      { label: "Max Alone Time (hrs)", key: "maxContinuousAloneTime", old: snapshot.lifestyle?.maxContinuousAloneTime, new: currentProfile.lifestyle?.maxContinuousAloneTime },
+      { label: "Budget Tier", key: "budgetTier", old: snapshot.lifestyle?.budgetTier || snapshot.lifestyle?.monthlyPetBudget, new: currentProfile.lifestyle?.budgetTier || currentProfile.lifestyle?.monthlyPetBudget },
+    ];
+    return fields.filter(f => f.old !== f.new && f.new !== undefined && f.old !== undefined);
+  };
+  const deltas = buildDeltas();
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -353,6 +362,12 @@ export function ApplicationDetailPage() {
                             <h2 className="text-3xl font-black text-gray-900 tracking-tight leading-none">{application.pet?.name || "Unknown Pet"}</h2>
                       </div>
                       <div className="flex flex-wrap gap-1.5 text-xs">
+                        {application.pet?.medical?.isSpecialNeeds || application.pet?.medical?.healthStatus === "special-needs" ? (
+                          <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full font-bold flex items-center gap-1"><Heart className="w-3 h-3" />Special Needs</span>
+                        ) : null}
+                        {application.pet?.environment?.idealEnvironment === "garden-required" ? (
+                          <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-bold flex items-center gap-1"><Home className="w-3 h-3" />Garden Required</span>
+                        ) : null}
                         {[application.pet?.breed, application.pet?.age ? `${application.pet.age} yrs` : null, application.pet?.gender, application.pet?.size].filter(Boolean).map((chip, i) => (
                           <span key={i} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full font-medium">{chip}</span>
                         ))}
@@ -423,6 +438,7 @@ export function ApplicationDetailPage() {
               <div className="lg:col-span-2 space-y-4">
 
                 {/* ═══ SECTION B: RISK & COMPATIBILITY INTELLIGENCE ═══ */}
+                {settings.compatibilityIntelligenceEnabled && (
                 <Card className="overflow-hidden border border-gray-100 shadow-sm">
                   <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
@@ -449,30 +465,24 @@ export function ApplicationDetailPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {factors.map((factor) => {
-                          const c = colorMap[factor.colorClass];
-                          const pct = factor.isPenalty ? 0 : (factor.score / factor.maxScore) * 100;
+                        {factors.map((factor: any) => {
+                          const pct = factor.maxScore > 0 ? (factor.score / factor.maxScore) * 100 : 0;
+                          const grade = pct >= 75 ? 'excellent' : pct >= 50 ? 'moderate' : 'low';
+                          const gradeColor = grade === 'excellent' ? 'green' : grade === 'moderate' ? 'amber' : 'red';
+                          const c = colorMap[gradeColor as keyof typeof colorMap] || colorMap.red;
                           return (
-                            <tr key={factor.name} className="border-b border-gray-50 group hover:bg-gray-50/50 transition-colors">
-                              <td className="py-2.5 pr-3 font-medium text-gray-700">{factor.name}</td>
+                            <tr key={factor.label || factor.name || Math.random().toString()} className="border-b border-gray-50 group hover:bg-gray-50/50 transition-colors">
+                              <td className="py-2.5 pr-3 font-medium text-gray-700" title={factor.explanation}>{factor.label || factor.name || "Unknown Factor"}</td>
                               <td className="py-2.5 text-center">
-                                {factor.isPenalty
-                                  ? <span className="font-bold text-red-600">{factor.score}</span>
-                                  : <span className={`font-bold ${c.text}`}>{factor.score}/{factor.maxScore}</span>}
+                                <span className={`font-bold ${c.text}`}>{factor.score}/{factor.maxScore}</span>
                               </td>
                               <td className="py-2.5 pl-3">
-                                {factor.isPenalty
-                                  ? <span className="text-xs bg-amber-50 text-amber-600 border border-amber-200 px-2 py-0.5 rounded-full">⚠ Caution</span>
-                                  : <div className="flex items-center gap-2">
-                                      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden min-w-[60px]">
-                                        <motion.div className={`h-full rounded-full ${c.bar}`} initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.8 }} />
-                                      </div>
-                                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border shrink-0 ${
-                              factor.weight === 'High' ? 'bg-red-50 text-red-600 border-red-200' :
-                              factor.weight === 'Medium' ? 'bg-amber-50 text-amber-600 border-amber-200' :
-                              'bg-gray-50 text-gray-500 border-gray-200'
-                            }`}>{factor.weight}</span>
-                                    </div>}
+                                <div className="flex items-center gap-2">
+                                  <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden min-w-[60px]">
+                                    <motion.div className={`h-full rounded-full ${c.bar}`} initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.8 }} />
+                                  </div>
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border shrink-0 ${gradeColor === 'green' ? 'bg-green-50 text-green-600 border-green-200' : gradeColor === 'amber' ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-red-50 text-red-600 border-red-200'} capitalize`}>{grade}</span>
+                                </div>
                               </td>
                             </tr>
                           );
@@ -481,8 +491,15 @@ export function ApplicationDetailPage() {
                       <tfoot>
                         <tr className="border-t-2 border-gray-200">
                           <td className="pt-3 font-black text-gray-900 text-sm">Final Score</td>
-                          <td className="pt-3 text-center"><span className={`font-black text-lg ${scoreColor}`}>{finalScore}/100</span></td>
-                          <td className="pt-3 pl-3"><span className={`text-xs font-bold px-2.5 py-1 rounded-full ${scoreBadgeCls}`}>{scoreLabel}</span></td>
+                          <td className="pt-3 text-center">
+                            <span className={`font-black text-lg ${scoreColor}`}>{finalScore}/100</span>
+                          </td>
+                          <td className="pt-3 pl-3 flex items-center gap-2">
+                            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${scoreBadgeCls}`}>{scoreLabel}</span>
+                            <span className={`text-[10px] font-bold px-2 py-1 rounded border ${confidenceLevel === "high" ? "bg-green-50 text-green-700 border-green-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
+                              {confidenceLevel === "high" ? "High Confidence" : "Low Confidence"}
+                            </span>
+                          </td>
                         </tr>
                       </tfoot>
                     </table>
@@ -501,8 +518,166 @@ export function ApplicationDetailPage() {
                     )}
                   </div>
                 </Card>
+                )}
+
+                {/* ═══ SECTION B.5: AI INSIGHTS ═══ */}
+                {settings.compatibilityIntelligenceEnabled && (
+                  <Card className="overflow-hidden border border-[var(--color-primary)] shadow-sm bg-indigo-50/10">
+                    <div className="px-5 py-4 border-b border-indigo-100 flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 rounded-lg bg-[var(--color-primary)] text-white"><Sparkles className="w-4 h-4" /></div>
+                        <h2 className="text-sm font-bold text-gray-800">Analyst AI Insights</h2>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon={<RefreshCw className={`w-3.5 h-3.5 ${regenerating ? 'animate-spin' : ''}`} />}
+                        onClick={handleRegenerateAI}
+                        disabled={regenerating}
+                        className="text-indigo-600 hover:bg-indigo-50"
+                      >
+                        {regenerating ? "Generating..." : "Regenerate"}
+                      </Button>
+                    </div>
+
+                    <div className="p-5">
+                      {(!aiInsights || aiInsights.status === 'generating' || aiInsights.status === 'none') ? (
+                         <div className="flex flex-col items-center justify-center py-6 text-indigo-400">
+                           <Loader2 className="w-8 h-8 animate-spin mb-3" />
+                           <p className="text-sm font-medium">Analyzing compatibility data...</p>
+                         </div>
+                      ) : aiInsights.status === 'error' ? (
+                        <div className="space-y-4">
+                          <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex gap-3">
+                            <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
+                            <div>
+                              <p className="text-sm font-bold text-red-900">AI Generation Failed</p>
+                              <p className="text-xs text-red-700 mt-1">{aiInsights.error || "The AI service encountered an error."}</p>
+                            </div>
+                          </div>
+                          <div className="text-center">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              icon={<RefreshCw className={`w-3.5 h-3.5 ${regenerating ? 'animate-spin' : ''}`} />}
+                              onClick={handleRegenerateAI}
+                              disabled={regenerating}
+                            >
+                              Try Again
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {/* Top Concern Box */}
+                          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-3">
+                            <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+                            <div>
+                              <p className="text-[10px] text-amber-700 uppercase font-black tracking-wider mb-0.5">Primary Concern</p>
+                              <p className="text-sm text-amber-900 font-medium">{aiInsights.topConcern}</p>
+                            </div>
+                          </div>
+                          
+                          {/* Explanation */}
+                          <div>
+                            <p className="text-sm text-gray-700 leading-relaxed font-medium">
+                              {aiInsights.explanation}
+                            </p>
+                          </div>
+
+                          {/* Suggested Questions */}
+                          <div className="pt-3 border-t border-indigo-50">
+                            <p className="text-[11px] text-indigo-900 uppercase font-bold tracking-wide mb-2 flex items-center gap-1.5">
+                              <User className="w-3 h-3" /> Suggested Meet & Greet Questions
+                            </p>
+                            <ul className="space-y-2">
+                              {aiInsights.questions?.map((q: string, i: number) => (
+                                <li key={i} className="text-sm text-gray-700 flex items-start gap-2 bg-white rounded-lg p-2.5 border border-indigo-50 shadow-sm">
+                                  <span className="text-indigo-400 font-bold shrink-0 mt-0.5">{i+1}.</span>
+                                  {q}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+
+                          {/* Footer */}
+                          <p className="text-[10px] text-gray-400 text-center pt-2">
+                            Generated {fmtDT(aiInsights.generatedAt)} · AI insights are advisory and do not make adoption decisions.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+                )}
 
                 {/* ═══ SECTION C: STRUCTURED REVIEW DATA ═══ */}
+
+                {/* Pet Requirements & Traits */}
+                <SectionCollapsible icon={PawPrint} iconBg="bg-amber-50 text-amber-600" title="Pet Requirements & Traits" expanded={expanded.petDetails} onToggle={() => toggle("petDetails")}>
+                  <div className="space-y-4 pt-1">
+                    
+                    {/* Medical details */}
+                    {application.pet?.medical && (
+                      <div>
+                        <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-2 flex items-center gap-1.5"><Heart className="w-3 h-3" />Medical & Health</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {[
+                            { l: "Health Status", v: application.pet.medical.healthStatus || "N/A" },
+                            { l: "Spayed/Neutered", v: application.pet.medical.spayedNeutered === true ? "Yes" : application.pet.medical.spayedNeutered === false ? "No" : "N/A" },
+                            { l: "Vaccinations", v: application.pet.medical.vaccinationStatus || "N/A" },
+                            { l: "Special Needs", v: application.pet.medical.isSpecialNeeds ? "Yes" : application.pet.medical.healthStatus === "special-needs" ? "Yes" : "No" },
+                          ].map(({ l, v }) => (
+                            <div key={l} className="bg-gray-50 rounded-lg p-2.5">
+                              <p className="text-[10px] text-gray-400 uppercase font-semibold mb-0.5">{l}</p>
+                              <p className={`text-sm font-semibold capitalize ${v === "Yes" ? "text-amber-600" : "text-gray-800"}`}>{String(v).replace(/-/g, ' ')}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Behaviour */}
+                    {application.pet?.behaviour && (
+                      <div className="pt-2 border-t border-gray-100">
+                        <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-2 flex items-center gap-1.5"><Activity className="w-3 h-3" />Behaviour Traits</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {[
+                            { l: "Energy (1-5)", v: application.pet.behaviour.energyScore || "N/A" },
+                            { l: "Separation Anxiety", v: application.pet.behaviour.separationAnxiety || "N/A" },
+                            { l: "Attachment Style", v: application.pet.behaviour.attachmentStyle || "N/A" },
+                            { l: "Training Difficulty", v: application.pet.behaviour.trainingDifficulty || "N/A" },
+                            { l: "Noise Level", v: application.pet.behaviour.noiseLevel || "N/A" },
+                            { l: "Shedding Level", v: application.pet.behaviour.sheddingLevel || "N/A" },
+                          ].map(({ l, v }) => (
+                            <div key={l} className="bg-gray-50 rounded-lg p-2.5">
+                              <p className="text-[10px] text-gray-400 uppercase font-semibold mb-0.5">{l}</p>
+                              <p className="text-sm font-semibold text-gray-800 capitalize">{String(v).replace(/-/g, ' ')}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Environment & Compatibility */}
+                     <div className="pt-2 border-t border-gray-100">
+                        <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-2 flex items-center gap-1.5"><Home className="w-3 h-3" />Environment & Match</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {[
+                            { l: "Ideal Home", v: application.pet?.environment?.idealEnvironment || "N/A" },
+                            { l: "Min Space", v: application.pet?.environment?.minSpaceSqm ? `${application.pet.environment.minSpaceSqm} sqm` : "N/A" },
+                            { l: "Good w/ Kids", v: application.pet?.compatibility?.goodWithKids === undefined ? "N/A" : String(application.pet.compatibility.goodWithKids).replace(/-/g, ' ') },
+                            { l: "Good w/ Pets", v: application.pet?.compatibility?.goodWithPets === undefined ? "N/A" : String(application.pet.compatibility.goodWithPets).replace(/-/g, ' ') },
+                          ].map(({ l, v }) => (
+                            <div key={l} className="bg-gray-50 rounded-lg p-2.5">
+                              <p className="text-[10px] text-gray-400 uppercase font-semibold mb-0.5">{l}</p>
+                              <p className="text-sm font-semibold text-gray-800 capitalize">{v}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                  </div>
+                </SectionCollapsible>
 
                 {/* Applicant Details */}
                 <SectionCollapsible icon={User} iconBg="bg-blue-50 text-blue-600" title="Applicant Details" expanded={expanded.applicant} onToggle={() => toggle("applicant")}>
@@ -523,7 +698,7 @@ export function ApplicationDetailPage() {
                             { l: "Fenced Yard", v: application.household.hasFencedYard ? "Yes ✓" : "No" },
                             { l: "Existing Pets", v: application.household.existingPets || "None" },
                             { l: "Children", v: application.household.hasChildren ? "Yes" : "No" },
-                            { l: "Routine", v: application.household.dailyRoutine || "N/A" },
+                            { l: "Routine", v: application.adoptionIntent?.typicalWeekdayRoutine || "N/A" },
                           ].map(({ l, v }) => (
                             <div key={l} className="bg-gray-50 rounded-lg p-2.5">
                               <p className="text-[10px] text-gray-400 uppercase font-semibold mb-0.5">{l}</p>
@@ -537,7 +712,11 @@ export function ApplicationDetailPage() {
                       <div className="pt-2 border-t border-gray-100 space-y-2">
                         <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide flex items-center gap-1.5"><PawPrint className="w-3 h-3" />Experience &amp; Intent</p>
                         {application.adoptionIntent.petExperience && <div><p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">Pet Experience</p><p className="text-sm text-gray-700 leading-relaxed">{application.adoptionIntent.petExperience}</p></div>}
-                        {application.adoptionIntent.whyAdopt && <div><p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">Why Adopt</p><p className="text-sm text-gray-700 leading-relaxed">{application.adoptionIntent.whyAdopt}</p></div>}
+                        {application.adoptionIntent.specificPetMotivation && <div><p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">Specific Motivation</p><p className="text-sm text-gray-700 leading-relaxed">{application.adoptionIntent.specificPetMotivation}</p></div>}
+                        {application.adoptionIntent.typicalWeekdayRoutine && <div><p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">Weekday Routine</p><p className="text-sm text-gray-700 leading-relaxed">{application.adoptionIntent.typicalWeekdayRoutine}</p></div>}
+                        {application.adoptionIntent.emergencyCarePlan && <div><p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">Emergency Care Plan</p><p className="text-sm text-gray-700 leading-relaxed">{application.adoptionIntent.emergencyCarePlan}</p></div>}
+                        {application.adoptionIntent.monthlyBudgetEstimate && <div><p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">Monthly Budget Estimate</p><p className="text-sm text-gray-700 leading-relaxed">{application.adoptionIntent.monthlyBudgetEstimate}</p></div>}
+                        {application.adoptionIntent.lifeChangesExplanation && <div><p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">Anticipated Life Changes</p><p className="text-sm text-gray-700 leading-relaxed">{application.adoptionIntent.lifeChangesExplanation}</p></div>}
                       </div>
                     )}
                     <div className="flex gap-2 pt-1">
@@ -546,6 +725,36 @@ export function ApplicationDetailPage() {
                     </div>
                   </div>
                 </SectionCollapsible>
+
+                {/* Profile Delta / Snapshot comparison */}
+                {snapshot && currentProfile && (
+                  <SectionCollapsible icon={Clock} iconBg="bg-orange-50 text-orange-600" title="Profile Updates Since Application" count={deltas.length} expanded={expanded.profileDelta} onToggle={() => toggle("profileDelta")}>
+                    <div className="pt-1">
+                      {deltas.length === 0 ? (
+                        <div className="text-center py-4 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                          <CheckCircle className="w-6 h-6 text-gray-300 mx-auto mb-2" />
+                          <p className="text-sm text-gray-500 font-medium">Profile completely unchanged since application.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <p className="text-xs text-gray-500 mb-2">The applicant has updated their profile since submitting this application. Here are the differences:</p>
+                          <div className="space-y-2">
+                            {deltas.map((d, i) => (
+                              <div key={i} className="flex items-center justify-between text-sm bg-gray-50 rounded-lg p-3 border border-orange-100">
+                                <span className="font-semibold text-gray-700 w-1/3 truncate" title={d.label}>{d.label}</span>
+                                <div className="flex items-center gap-2 flex-1 justify-end min-w-0">
+                                  <span className="text-gray-400 line-through truncate max-w-[40%]" title={d.old}>{d.old || "None"}</span>
+                                  <ArrowLeft className="w-3 h-3 text-orange-400 shrink-0 rotate-180" />
+                                  <span className="font-bold text-orange-600 truncate max-w-[40%]" title={d.new}>{d.new || "None"}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </SectionCollapsible>
+                )}
 
                 {/* Documents */}
                 {docs.length > 0 && (
@@ -639,7 +848,8 @@ export function ApplicationDetailPage() {
                       { l: "Application ID", v: <span className="font-mono text-xs text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded">#{application._id.substring(0, 8)}</span> },
                       { l: "Submitted", v: fmtDate(application.createdAt) },
                       { l: "Docs Verified", v: `${verifiedDocs}/${docs.length}` },
-                      ...(application.meetAndGreet?.scheduledDate ? [{ l: "Meeting", v: fmtDate(application.meetAndGreet.scheduledDate) }] : []),
+                      // V2.1 Issue 14: Use new confirmedSlot.date path, fallback to legacy field
+                      ...((application.meetAndGreet?.confirmedSlot?.date || application.scheduledDate) ? [{ l: "Meeting", v: fmtDate(application.meetAndGreet?.confirmedSlot?.date || application.scheduledDate) }] : []),
                       ...(application.meetAndGreet?.followUpCount > 0 ? [{ l: "Follow-Ups", v: <span className="text-amber-600 font-semibold">{application.meetAndGreet.followUpCount}</span> }] : []),
                     ].map(({ l, v }) => (
                       <div key={l} className="flex justify-between items-center">

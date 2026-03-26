@@ -66,49 +66,6 @@ body {
 
 /* ============================================ */
 
-/* ============================================ */
-
-/* THEME 1: LAVENDER LIGHT (Soft Lavender + White) */
-
-/* ============================================ */
-
-.theme-lavender {
-  /* Primary Colors */
-  --color-primary: #b19cd9;
-  --color-primary-dark: #967ac3;
-  --color-secondary: #e6e6fa;
-  --color-accent: #ffb7b2;
-  /* Backgrounds */
-  --color-background: #fdfbff;
-  --color-surface: #f8f5fc;
-  --color-card: #ffffff;
-  /* Text */
-  --color-text: #4a4059;
-  --color-text-light: #8e849e;
-  /* Borders */
-  --color-border: #efe6fd;
-  /* Status Colors */
-  --color-success: #98d8aa;
-  --color-error: #ff9b9b;
-  --color-warning: #ffd966;
-  --color-info: #a0c4ff;
-  /* Typography */
-  --font-heading: "Plus Jakarta Sans", sans-serif;
-  --font-body: "DM Sans", sans-serif;
-  /* Spacing */
-  --radius-sm: 12px;
-  --radius-md: 16px;
-  --radius-lg: 20px;
-  --radius-xl: 24px;
-  /* Shadows */
-  --shadow-sm: 0 2px 8px rgba(177, 156, 217, 0.1);
-  --shadow-md: 0 4px 12px rgba(177, 156, 217, 0.15);
-  --shadow-lg: 0 8px 24px rgba(177, 156, 217, 0.2);
-  --shadow-xl: 0 16px 32px rgba(177, 156, 217, 0.25);
-}
-
-/* ============================================ */
-
 /* THEME 2: SOFT & FRIENDLY (Terracotta + Soft Green) - DEFAULT */
 
 /* ============================================ */
@@ -325,9 +282,6 @@ h6 {
   transition-duration: 0.2s;
 }
 
-.theme-lavender * {
-  transition-timing-function: ease-in-out;
-}
 
 .theme-royal * {
   transition-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -461,6 +415,192 @@ h6 {
   50% {
     transform: translateY(-10px);
   }
+}
+
+/* Pet-themed paw print button hover animation */
+@keyframes petPawFloat {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.3) rotate(var(--paw-rotate, 0deg));
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-8px) scale(1.1) rotate(var(--paw-rotate, 0deg));
+  }
+  70% {
+    opacity: 0.8;
+    transform: translateY(-18px) scale(0.95) rotate(var(--paw-rotate, 0deg));
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-26px) scale(0.7) rotate(var(--paw-rotate, 0deg));
+  }
+}
+
+/* ============================================ */
+
+/* ADMIN DARK LAYOUT THEME (Permanent) */
+
+/* ============================================ */
+
+.admin-layout {
+  --color-background: #0f1117;
+  --color-surface: #1a1d27;
+  --color-card: #1e2130;
+  --color-text: #e2e8f0;
+  --color-text-light: #8892a4;
+  --color-border: #2d3348;
+  --color-primary: #c0392b;
+  --color-primary-dark: #a93226;
+  --color-success: #22c55e;
+  --color-error: #e74c3c;
+  --color-warning: #f59e0b;
+  --color-info: #3b82f6;
+  --color-accent: #f97316;
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.4);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.5);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.6);
+  background: var(--color-background);
+  color: var(--color-text);
+  min-height: 100vh;
+}
+
+.admin-layout h1,
+.admin-layout h2,
+.admin-layout h3,
+.admin-layout h4,
+.admin-layout h5,
+.admin-layout h6 {
+  color: var(--color-text);
+}
+
+/* Admin Sidebar Dark */
+.admin-layout .bg-white {
+  background-color: #1e2130 !important;
+}
+
+.admin-layout .bg-gray-50 {
+  background-color: #1a1d27 !important;
+}
+
+.admin-layout .bg-gray-100 {
+  background-color: #252840 !important;
+}
+
+.admin-layout .bg-gray-200 {
+  background-color: #2d3348 !important;
+}
+
+.admin-layout .text-gray-900,
+.admin-layout .text-gray-800 {
+  color: #e2e8f0 !important;
+}
+
+.admin-layout .text-gray-700,
+.admin-layout .text-gray-600 {
+  color: #a0aec0 !important;
+}
+
+.admin-layout .text-gray-500,
+.admin-layout .text-gray-400 {
+  color: #718096 !important;
+}
+
+.admin-layout .border-gray-200,
+.admin-layout .border-gray-100 {
+  border-color: #2d3348 !important;
+}
+
+.admin-layout .divide-gray-100 > * + * {
+  border-color: #2d3348 !important;
+}
+
+.admin-layout .divide-gray-200 > * + * {
+  border-color: #2d3348 !important;
+}
+
+.admin-layout .hover\:bg-gray-50:hover {
+  background-color: #252840 !important;
+}
+
+.admin-layout .hover\:bg-gray-100:hover {
+  background-color: #2d3348 !important;
+}
+
+.admin-layout input,
+.admin-layout textarea,
+.admin-layout select {
+  background-color: #1a1d27 !important;
+  color: #e2e8f0 !important;
+  border-color: #2d3348 !important;
+}
+
+.admin-layout input::placeholder,
+.admin-layout textarea::placeholder {
+  color: #4a5568 !important;
+}
+
+.admin-layout table thead tr {
+  background-color: #1a1d27 !important;
+}
+
+.admin-layout .bg-gray-900 {
+  background-color: #0f1117 !important;
+}
+
+/* ============================================ */
+/* INTERACTION SYSTEM                            */
+/* ============================================ */
+
+.admin-layout .interactive-card {
+  cursor: pointer;
+  transition: background-color 0.2s ease, filter 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
+}
+
+.admin-layout .interactive-card:hover {
+  filter: brightness(1.12);
+}
+
+.admin-layout .interactive-card:active {
+  filter: brightness(0.95);
+  transform: scale(0.99);
+}
+
+.admin-layout tr.hover\:bg-red-50\/30:hover {
+  background-color: rgba(239, 68, 68, 0.04) !important;
+}
+
+/* ============================================ */
+/* BUTTONS                                       */
+/* ============================================ */
+
+.admin-layout .btn-primary {
+  background: linear-gradient(135deg, #c0392b 0%, #a93226 100%) !important;
+  color: white !important;
+  border: none !important;
+  box-shadow: 0 4px 14px 0 rgba(192, 57, 43, 0.4) !important;
+}
+
+.admin-layout .btn-primary:hover {
+  filter: brightness(1.1) !important;
+}
+
+.admin-layout .btn-secondary {
+  background-color: transparent !important;
+  color: #e2e8f0 !important;
+  border: 1px solid #2d3348 !important;
+}
+
+.admin-layout .btn-secondary:hover {
+  border-color: #4b5563 !important;
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Extra CSS var for text-muted used by components */
+.admin-layout {
+  --color-text-muted: #4a5568;
+  --color-border-hover: #4b5563;
+  --color-primary-light: rgba(192, 57, 43, 0.15);
 }
 
 /* ============================================ */

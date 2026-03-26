@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { Send, ArrowLeft, MessageCircle, Trash2 } from "lucide-react";
+import { Send, ArrowLeft, MessageCircle, Trash2, AlertTriangle } from "lucide-react";
 import { useSocket } from "../../contexts/SocketContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { Button } from "../ui/Button";
@@ -502,21 +502,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 handleSend();
               }
             }}
-            placeholder="Type a message..."
+            placeholder={user?.status === 'suspended' ? "Your account is suspended" : "Type a message..."}
+            disabled={user?.status === 'suspended'}
             className="flex-1 px-4 py-3 rounded-xl transition-all focus:outline-none"
             style={{
-              background: "var(--color-surface)",
+              background: user?.status === 'suspended' ? "var(--color-background)" : "var(--color-surface)",
               border: "2px solid var(--color-border)",
-              color: "var(--color-text)",
+              color: user?.status === 'suspended' ? "var(--color-text-light)" : "var(--color-text)",
+              cursor: user?.status === 'suspended' ? "not-allowed" : "text"
             }}
           />
           <Button
             variant="primary"
             className="rounded-xl px-5"
             onClick={handleSend}
-            disabled={!newMessage.trim()}
+            disabled={!newMessage.trim() || user?.status === "suspended"}
           >
-            <Send className="w-5 h-5" />
+            {user?.status === 'suspended' ? <AlertTriangle className="w-5 h-5" /> : <Send className="w-5 h-5" />}
           </Button>
         </div>
       </div>

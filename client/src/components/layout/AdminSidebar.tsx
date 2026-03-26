@@ -10,11 +10,12 @@ import {
   Flag,
   FileText,
   Heart,
+  UserCheck
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { LogoutConfirmModal } from "../common/LogoutConfirmModal";
 
-type TabType = "dashboard" | "users" | "shelters" | "donations" | "reports" | "logs" | "settings" | "security";
+type TabType = "dashboard" | "platform_users" | "users" | "shelters" | "donations" | "reports" | "logs" | "settings" | "security";
 
 interface AdminSidebarProps {
     activeTab?: TabType;
@@ -44,6 +45,11 @@ export function AdminSidebar({ activeTab = "dashboard", setActiveTab }: AdminSid
       id: "dashboard" as TabType,
       icon: LayoutDashboard,
       label: "Dashboard",
+    },
+    {
+      id: "platform_users" as TabType,
+      icon: UserCheck,
+      label: "Platform Users",
     },
     {
       id: "users" as TabType,
@@ -96,7 +102,7 @@ export function AdminSidebar({ activeTab = "dashboard", setActiveTab }: AdminSid
           <div
             className="p-2.5 rounded-xl shadow-sm"
             style={{
-              background: "linear-gradient(135deg, var(--color-error) 0%, #dc2626 100%)",
+              background: "linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)",
             }}
           >
             <Shield className="w-7 h-7 text-white" />
@@ -130,7 +136,7 @@ export function AdminSidebar({ activeTab = "dashboard", setActiveTab }: AdminSid
                 }`}
                 style={{
                   background: active
-                    ? "linear-gradient(135deg, var(--color-error) 0%, #dc2626 100%)"
+                    ? "linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)"
                     : "transparent",
                   color: active ? "white" : "var(--color-text)",
                 }}

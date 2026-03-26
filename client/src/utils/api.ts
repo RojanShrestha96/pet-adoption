@@ -32,14 +32,24 @@ api.interceptors.response.use(
       if (message.includes('expired') || message.includes('Invalid')) {
         // Clear expired token
         localStorage.removeItem('token');
-        localStorage.removeItem('userType');
-        localStorage.removeItem('userId');
+        localStorage.removeItem('user');
         
         // Show user-friendly message
         alert('Your session has expired. Please log in again.');
         
         // Redirect to login
         window.location.href = '/login';
+      }
+    } else if (error.response?.status === 403) {
+      const data = error.response.data;
+      if (data.isBanned) {
+        // Handle global ban logout
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        
+        // Show ban reason if available
+        const reason = data.message || 'Account banned for violating terms.';
+        window.location.href = `/login?error=banned&reason=${encodeURIComponent(reason)}`;
       }
     }
     return Promise.reject(error);

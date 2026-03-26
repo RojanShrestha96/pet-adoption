@@ -32,6 +32,7 @@ export interface Pet {
     contact: string;
     email: string;
   };
+  distanceKm?: number;
 }
 export interface Shelter {
   id: string;
@@ -39,6 +40,8 @@ export interface Shelter {
   location: string;
   distance: string;
   image: string;
+  logo?: string;
+  coverImage?: string;
   petsAvailable: number;
 }
 export const mockPets: Pet[] = [{

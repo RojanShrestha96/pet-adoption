@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useLocation } from 'react-router-dom';
 import { X, Send, Search, FileText, Phone, HelpCircle, PawPrint, Sparkles } from 'lucide-react';
 interface Message {
   id: string;
@@ -29,6 +30,11 @@ const quickActions = [{
   response: "Great choice! Here's what you need to know about adoption:\n\n1️⃣ Browse pets and find your match\n2️⃣ Submit an application\n3️⃣ Complete a home visit\n4️⃣ Meet your new friend!\n\nWould you like more details on any step?"
 }];
 export function Chatbot() {
+  const location = useLocation();
+  const isAdminPath = location.pathname.startsWith('/admin') || location.pathname.startsWith('/admin-secure-access');
+  
+  if (isAdminPath) return null;
+
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([{
     id: '1',

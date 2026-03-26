@@ -8,6 +8,7 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { LoadingSpinner } from "../../components/common/LoadingSpinner";
 import { ConfirmationDialog } from "../../components/common/ConfirmationDialog";
+import { AdminSidebar } from "../../components/layout/AdminSidebar";
 import {
   ArrowLeft,
   Mail,
@@ -22,7 +23,8 @@ import {
   FileText,
   ExternalLink,
   AlertTriangle,
-  Check
+  Check,
+  Building2
 } from "lucide-react";
 
 interface Shelter {
@@ -176,7 +178,7 @@ export function AdminShelterDetailsPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="admin-layout flex min-h-screen bg-[#0f1117] items-center justify-center">
         <LoadingSpinner size="lg" />
       </div>
     );
@@ -184,9 +186,9 @@ export function AdminShelterDetailsPage() {
 
   if (!shelter) {
       return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Shelter Not Found</h2>
-            <p className="text-gray-500 mb-6">The requested shelter could not be found or has been removed.</p>
+        <div className="admin-layout flex min-h-screen bg-[#0f1117] flex-col items-center justify-center p-4">
+            <h2 className="text-2xl font-bold text-white mb-2">Shelter Not Found</h2>
+            <p className="text-gray-400 mb-6">The requested shelter could not be found or has been removed.</p>
             <Button onClick={() => navigate("/admin/dashboard", { state: { activeTab: "shelters" } })}>
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to Dashboard
@@ -196,24 +198,28 @@ export function AdminShelterDetailsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
+    <div className="admin-layout flex min-h-screen">
+      <AdminSidebar activeTab="shelters" setActiveTab={() => navigate("/admin/dashboard", { state: { activeTab: "shelters" } })} />
+      
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div>
           <button
             onClick={() => navigate("/admin/dashboard", { state: { activeTab: "shelters" } })}
-            className="flex items-center text-gray-500 hover:text-gray-900 transition-colors mb-4"
+            className="flex items-center text-[#8892a4] hover:text-white transition-colors mb-4"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Dashboard
           </button>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <h1 className="text-3xl font-bold text-gray-900">{shelter.name}</h1>
+            <h1 className="text-3xl font-bold text-white">{shelter.name}</h1>
             <div className="flex items-center gap-3">
               {!shelter.isVerified && (
                   <Button 
                     onClick={handleVerifyShelter}
-                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white border-none"
+                    className="flex items-center gap-2"
+                    style={{ background: 'var(--color-primary)', border: 'none' }}
                   >
                     <Check className="w-4 h-4" />
                     Verify Shelter
@@ -601,7 +607,8 @@ export function AdminShelterDetailsPage() {
         confirmText="Yes, Reject"
         variant="danger"
       />
-    </div>
+      </div>
+    </main>
     </div>
   );
 }

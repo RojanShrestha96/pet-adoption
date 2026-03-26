@@ -22,6 +22,7 @@ import { useToast } from "../ui/Toast";
 import { useAdopterProfile } from "../../contexts/AdopterProfileContext";
 import { AdoptionInfoModal } from "./AdoptionInfoModal";
 import { CompatibilityScorePanel } from "./CompatibilityScorePanel";
+import { useSettings } from "../../contexts/SettingsContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -88,23 +89,9 @@ const screeningQuestions = [
 
 // ─── Step configs per flow case ───────────────────────────────────────────────
 
-// Case A: profile complete → Screening → Intent → Compatibility → Review
-const STEPS_CASE_A = [
-  { id: 0, title: "Quick Screening", icon: ClipboardCheck },
-  { id: 1, title: "Adoption Intent", icon: Heart },
-  { id: 2, title: "Compatibility", icon: FileText },
-  { id: 3, title: "Review", icon: Check },
-];
+// ─── Step Case Definitions (Retired for Dynamic Flow) ───────────────────────
+// Steps are now calculated dynamically in the useEffect block based on profile.completedSections.
 
-// Case B / C: missing profile → Screening → Personal Info → Household → Intent → Compatibility → Review
-const STEPS_CASE_BC = [
-  { id: 0, title: "Screening", icon: ClipboardCheck },
-  { id: 1, title: "Personal Info", icon: User },
-  { id: 2, title: "Household", icon: Home },
-  { id: 3, title: "Intent", icon: Heart },
-  { id: 4, title: "Compatibility", icon: FileText },
-  { id: 5, title: "Review", icon: Check },
-];
 
 // ─── Prefill Banner ───────────────────────────────────────────────────────────
 
@@ -171,14 +158,15 @@ function LockedField({ label, value }: { label: string; value: string }) {
 
 export function AdoptionModal({ pet, isOpen, onClose, onSubmit }: AdoptionModalProps) {
   const { showToast } = useToast();
-  const { profile, profileStatus, refreshProfile } = useAdopterProfile();
+  const { profile, profileStatus, refreshProfile, saveProfile } = useAdopterProfile();
+  const { settings } = useSettings();
 
   // ── Flow determination ────────────────────────────────────────────────────
 
   // caseA = profile complete, caseB = partial, caseC = none
   type FlowCase = "A" | "B" | "C";
   const [flowCase, setFlowCase] = useState<FlowCase>("C");
-  const [steps, setSteps] = useState(STEPS_CASE_BC);
+  const [steps, setSteps] = useState<any[]>([]);
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [missingSections, setMissingSections] = useState<string[]>([]);
   const [profileLoaded, setProfileLoaded] = useState(false);
@@ -186,26 +174,45 @@ export function AdoptionModal({ pet, isOpen, onClose, onSubmit }: AdoptionModalP
   useEffect(() => {
     if (!isOpen || profileStatus === "loading") return;
 
-    if (profileStatus === "complete") {
-      setFlowCase("A");
-      setSteps(STEPS_CASE_A);
-    } else if (profileStatus === "partial") {
-      setFlowCase("B");
-      setSteps(STEPS_CASE_BC);
-      // Determine missing sections from profile
+    // Start with always-required steps
+    const dynamicSteps = [
+      { id: 0, title: "Quick Screening", icon: ClipboardCheck },
+    ];
+
+    // Add Personal Info if not complete in profile
+    if (!profile?.completedSections?.includes("personalInfo")) {
+      dynamicSteps.push({ id: dynamicSteps.length, title: "Personal Info", icon: User });
+    }
+
+    // Add Household if not complete in profile
+    if (!profile?.completedSections?.includes("household")) {
+      dynamicSteps.push({ id: dynamicSteps.length, title: "Household", icon: Home });
+    }
+
+    // Add always-required Intent step
+    dynamicSteps.push({ id: dynamicSteps.length, title: "Adoption Intent", icon: Heart });
+
+    // Add Compatibility if enabled
+    if (settings.compatibilityIntelligenceEnabled) {
+      dynamicSteps.push({ id: dynamicSteps.length, title: "Compatibility", icon: FileText });
+    }
+
+    // Add Review step
+    dynamicSteps.push({ id: dynamicSteps.length, title: "Review", icon: Check });
+
+    setSteps(dynamicSteps);
+    setFlowCase(profileStatus === "complete" ? "A" : "B"); // Simple fallback for existing logic
+    
+    if (profileStatus !== "complete") {
       const missing: string[] = [];
       if (!profile?.completedSections?.includes("personalInfo")) missing.push("personalInfo");
       if (!profile?.completedSections?.includes("household")) missing.push("household");
       if (!profile?.completedSections?.includes("lifestyle")) missing.push("lifestyle");
       setMissingSections(missing);
-    } else {
-      setFlowCase("C");
-      setSteps(STEPS_CASE_BC);
-      setMissingSections(["personalInfo", "household", "lifestyle"]);
     }
 
     setProfileLoaded(true);
-  }, [isOpen, profileStatus, profile]);
+  }, [isOpen, profileStatus, profile, settings.compatibilityIntelligenceEnabled]);
 
   // ── Show profile collection modal for Cases B & C ────────────────────────
 
@@ -262,12 +269,19 @@ export function AdoptionModal({ pet, isOpen, onClose, onSubmit }: AdoptionModalP
     medicalAffordability: false,
     annualVaccinations: false,
     whyAdopt: "",
+    // Issue 13: petExperience auto-populated from profile — no manual input
     petExperience: "",
     adoptionTimeline: "",
     readyForHomeVisit: false,
     handleVetVisits: false,
     proofOfResidence: [] as string[],
     agreeToTerms: false,
+    // Issue 12: Missing adoptionIntent fields — now collected in UI
+    typicalWeekdayRoutine: "",
+    emergencyCarePlan: "",
+    specificPetMotivation: "",
+    monthlyBudgetEstimate: "",
+    lifeChangesExplanation: "",
   });
 
   // ── Pre-fill formData from profile ────────────────────────────────────────
@@ -276,7 +290,6 @@ export function AdoptionModal({ pet, isOpen, onClose, onSubmit }: AdoptionModalP
     if (!isOpen || !profile) return;
 
     if (profile.personalInfo) {
-      // Profile has saved personalInfo — use it
       setFormData((prev) => ({
         ...prev,
         fullName: profile.personalInfo?.fullName ?? prev.fullName,
@@ -288,7 +301,6 @@ export function AdoptionModal({ pet, isOpen, onClose, onSubmit }: AdoptionModalP
         idDocuments: profile.personalInfo?.idDocuments ?? prev.idDocuments,
       }));
     } else {
-      // No personalInfo yet — pre-seed address & phone from User model fields
       setFormData((prev) => ({
         ...prev,
         address: prev.address || profile.userAddress || "",
@@ -314,9 +326,21 @@ export function AdoptionModal({ pet, isOpen, onClose, onSubmit }: AdoptionModalP
     }
 
     if (profile.email) {
+      setFormData((prev) => ({ ...prev, email: profile.email ?? prev.email }));
+    }
+
+    // Issue 13: Auto-populate petExperience from profile experienceLevel (Turbo Flow fix)
+    if (profile.lifestyle?.experienceLevel) {
+      const expLabel: Record<string, string> = {
+        "first-time": "I am a first-time pet owner.",
+        "none": "I have no prior experience with pets.",
+        "some": "I have some prior experience caring for pets.",
+        "some-experience": "I have some prior experience caring for pets.",
+        "experienced": "I am an experienced pet owner with multiple animals over the years.",
+      };
       setFormData((prev) => ({
         ...prev,
-        email: profile.email ?? prev.email,
+        petExperience: expLabel[profile.lifestyle?.experienceLevel ?? ""] ?? prev.petExperience,
       }));
     }
   }, [isOpen, profile]);
@@ -356,10 +380,14 @@ export function AdoptionModal({ pet, isOpen, onClose, onSubmit }: AdoptionModalP
 
   // Map step index to logical step name per flow case
   const getStepName = (stepIdx: number) => {
-    if (flowCase === "A") {
-      return ["screening", "intent", "compatibility", "review"][stepIdx];
-    }
-    return ["screening", "personalInfo", "household", "intent", "compatibility", "review"][stepIdx];
+      if (!steps || steps.length === 0 || !steps[stepIdx]) return "";
+      if (steps[stepIdx].title === "Quick Screening" || steps[stepIdx].title === "Screening") return "screening";
+      if (steps[stepIdx].title === "Personal Info") return "personalInfo";
+      if (steps[stepIdx].title === "Household") return "household";
+      if (steps[stepIdx].title === "Adoption Intent" || steps[stepIdx].title === "Intent") return "intent";
+      if (steps[stepIdx].title === "Compatibility") return "compatibility";
+      if (steps[stepIdx].title === "Review") return "review";
+      return "";
   };
 
   const handleNext = () => {
@@ -421,6 +449,47 @@ export function AdoptionModal({ pet, isOpen, onClose, onSubmit }: AdoptionModalP
     }
 
     try {
+      // ── Sync to Profile ───────────────────────────────────────────────────
+      // If we filled in personalInfo or household during this app (Missing in profile),
+      // sync it back to the permanent profile so the next app is "Turbo".
+      const syncPersonalInfo = !profile?.completedSections?.includes("personalInfo");
+      const syncHousehold = !profile?.completedSections?.includes("household");
+
+      if (syncPersonalInfo || syncHousehold) {
+        try {
+          await saveProfile({
+            personalInfo: syncPersonalInfo ? {
+              fullName: formData.fullName,
+              phone: formData.phone,
+              age: parseInt(formData.age),
+              address: formData.address,
+              idType: formData.idType,
+              idNumber: formData.idNumber,
+              idDocuments: formData.idDocuments,
+            } : undefined,
+            household: syncHousehold ? {
+              homeType: formData.homeType,
+              rentOwn: formData.rentOwn,
+              landlordPermission: formData.landlordPermission,
+              hasChildren: formData.hasChildren,
+              childrenDetails: formData.childrenDetails,
+              existingPets: formData.existingPets,
+              hasFencedYard: formData.hasFencedYard,
+              safeEnvironment: formData.safeEnvironment,
+              medicalAffordability: formData.medicalAffordability,
+              annualVaccinations: formData.annualVaccinations,
+              proofOfResidence: formData.proofOfResidence,
+            } : undefined,
+            lifestyle: syncHousehold ? {
+              dailyRoutine: formData.dailyRoutine,
+            } : undefined,
+          });
+        } catch (syncErr) {
+          console.warn("Minor: Failed to sync application data back to profile:", syncErr);
+          // Don't block application submission if profile sync fails
+        }
+      }
+
       const api = (await import("../../utils/api")).default;
 
       const payload = {
@@ -463,6 +532,12 @@ export function AdoptionModal({ pet, isOpen, onClose, onSubmit }: AdoptionModalP
           adoptionTimeline: formData.adoptionTimeline,
           readyForHomeVisit: formData.readyForHomeVisit,
           handleVetVisits: formData.handleVetVisits,
+          // Issue 12: Include all new intent fields in submission payload
+          typicalWeekdayRoutine: formData.typicalWeekdayRoutine,
+          emergencyCarePlan: formData.emergencyCarePlan,
+          specificPetMotivation: formData.specificPetMotivation,
+          monthlyBudgetEstimate: formData.monthlyBudgetEstimate,
+          lifeChangesExplanation: formData.lifeChangesExplanation,
         },
         agreeToTerms: formData.agreeToTerms,
       };
@@ -745,19 +820,96 @@ export function AdoptionModal({ pet, isOpen, onClose, onSubmit }: AdoptionModalP
               onChange={(e) => setFormData({ ...formData, whyAdopt: e.target.value })}
             />
           </div>
+
+          {/* Issue 12: specificPetMotivation — NEW */}
           <div>
             <label className="block text-sm font-medium mb-2" style={{ color: "var(--color-text)" }}>
-              Experience with Pets
+              What specifically about {pet.name}'s personality drew you to them?
             </label>
             <textarea
               className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none transition-colors"
               style={{ borderColor: "var(--color-border)", background: "var(--color-card)", color: "var(--color-text)" }}
               rows={3}
-              placeholder="Describe your experience with pets"
-              value={formData.petExperience}
-              onChange={(e) => setFormData({ ...formData, petExperience: e.target.value })}
+              placeholder={`E.g. "${pet.name}'s calm nature suits my quiet lifestyle."`}
+              value={formData.specificPetMotivation}
+              onChange={(e) => setFormData({ ...formData, specificPetMotivation: e.target.value })}
             />
           </div>
+
+          {/* Issue 12: typicalWeekdayRoutine — NEW */}
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: "var(--color-text)" }}>
+              Describe a typical weekday in your home
+            </label>
+            <textarea
+              className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none transition-colors"
+              style={{ borderColor: "var(--color-border)", background: "var(--color-card)", color: "var(--color-text)" }}
+              rows={3}
+              placeholder="E.g. 'I leave at 8am, return at 5pm. Evenings are quiet at home.'"
+              value={formData.typicalWeekdayRoutine}
+              onChange={(e) => setFormData({ ...formData, typicalWeekdayRoutine: e.target.value })}
+            />
+          </div>
+
+          {/* Issue 12: emergencyCarePlan — NEW */}
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: "var(--color-text)" }}>
+              If you were unexpectedly unable to care for {pet.name}, what is your backup plan?
+            </label>
+            <textarea
+              className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none transition-colors"
+              style={{ borderColor: "var(--color-border)", background: "var(--color-card)", color: "var(--color-text)" }}
+              rows={3}
+              placeholder="E.g. 'My sister is a reliable backup caretaker.'"
+              value={formData.emergencyCarePlan}
+              onChange={(e) => setFormData({ ...formData, emergencyCarePlan: e.target.value })}
+            />
+          </div>
+
+          {/* Issue 12: monthlyBudgetEstimate — NEW */}
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: "var(--color-text)" }}>
+              Have you researched the typical monthly costs for {pet.name}? What is your estimate?
+            </label>
+            <textarea
+              className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none transition-colors"
+              style={{ borderColor: "var(--color-border)", background: "var(--color-card)", color: "var(--color-text)" }}
+              rows={2}
+              placeholder="E.g. 'I've budgeted approximately Rs 8,000/month for food, vet visits and grooming.'"
+              value={formData.monthlyBudgetEstimate}
+              onChange={(e) => setFormData({ ...formData, monthlyBudgetEstimate: e.target.value })}
+            />
+          </div>
+
+          {/* Issue 12: lifeChangesExplanation — NEW */}
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: "var(--color-text)" }}>
+              Are there any upcoming life changes that might affect your ability to care for {pet.name}?
+            </label>
+            <textarea
+              className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none transition-colors"
+              style={{ borderColor: "var(--color-border)", background: "var(--color-card)", color: "var(--color-text)" }}
+              rows={2}
+              placeholder="E.g. 'We are expecting a baby in 6 months but have a solid plan for the transition.'"
+              value={formData.lifeChangesExplanation}
+              onChange={(e) => setFormData({ ...formData, lifeChangesExplanation: e.target.value })}
+            />
+          </div>
+
+          {/* Issue 13: petExperience now auto-populated from profile — shown as locked read-only */}
+          {formData.petExperience && (
+            <div
+              className="flex items-start gap-3 p-3 rounded-xl"
+              style={{ background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.25)" }}
+            >
+              <Check className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: "var(--color-success, #22c55e)" }} />
+              <div>
+                <p className="text-sm font-medium" style={{ color: "var(--color-text)" }}>Experience Level (from your profile)</p>
+                <p className="text-sm mt-0.5" style={{ color: "var(--color-text-light)" }}>{formData.petExperience}</p>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-3">
             <ToggleSwitch checked={formData.readyForHomeVisit}
               onChange={(v) => setFormData({ ...formData, readyForHomeVisit: v })}
@@ -1019,7 +1171,7 @@ export function AdoptionModal({ pet, isOpen, onClose, onSubmit }: AdoptionModalP
                 {/* Step progress */}
                 <div className="px-6 py-4 flex-shrink-0" style={{ background: "var(--color-surface)" }}>
                   <div className="flex items-center justify-between">
-                    {steps.map((step, index) => {
+                    {steps.map((step: any, index: number) => {
                       const Icon = step.icon;
                       const isCompleted = index < currentStep;
                       const isCurrent = index === currentStep;

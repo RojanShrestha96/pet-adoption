@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import api from "../../utils/api";
 import {
@@ -33,10 +33,16 @@ import {
   AlertTriangle,
   FileText,
   Flag,
-  Server,
-  Database,
   Info,
   Clock,
+  ChevronLeft,
+  ChevronRight,
+  Ban,
+  CheckCircle2,
+  TrendingDown,
+  DollarSign,
+  XCircle,
+  UserCheck,
 } from "lucide-react";
 import {
   BarChart,
@@ -57,13 +63,19 @@ import { LoadingSpinner } from "../../components/common/LoadingSpinner";
 import { NotificationCenter } from "../../components/common/NotificationCenter";
 import { HamburgerMenu } from "../../components/layout/HamburgerMenu";
 import { useAuth } from "../../contexts/AuthContext";
+import { useSettings } from "../../contexts/SettingsContext";
 import { useToast } from "../../components/ui/Toast";
 
-type TabType = "dashboard" | "users" | "shelters" | "donations" | "reports" | "logs" | "settings" | "security";
+import { AdminModerationAlert } from "../../components/admin/AdminModerationAlert";
+import { AdminDonations } from "../../components/admin/AdminDonations";
+type TabType = "dashboard" | "platform_users" | "users" | "shelters" | "donations" | "reports" | "logs" | "settings" | "security";
+type ShelterFilterType = "all" | "verified" | "pending" | "suspended";
+type PetFilterType = "all" | "dog" | "cat" | "other";
 
 export function AdminDashboard() {
   const navigate = useNavigate();
   const { user, token } = useAuth();
+  const { settings, refreshSettings } = useSettings();
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<TabType>("dashboard");
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
@@ -74,8 +86,30 @@ export function AdminDashboard() {
   const [dashboardStats, setDashboardStats] = useState<any>(null);
   const [admins, setAdmins] = useState<any[]>([]);
   const [shelters, setShelters] = useState<any[]>([]);
-  const [shelterFilter, setShelterFilter] = useState<'all' | 'verified' | 'pending'>('all');
+  const [shelterFilter, setShelterFilter] = useState<ShelterFilterType>('all');
   const [donations, setDonations] = useState<any[]>([]);
+  const [pendingPets, setPendingPets] = useState<any[]>([]);
+  const [petModerationFilter, setPetModerationFilter] = useState<PetFilterType>('all');
+  const [selectedModerationPet, setSelectedModerationPet] = useState<any>(null);
+
+  // Platform Users States
+  const [platformUsers, setPlatformUsers] = useState<any[]>([]);
+  const [userStatusFilter, setUserStatusFilter] = useState<'all' | 'active' | 'warned' | 'suspended' | 'banned'>('all');
+  const [selectedPlatformUser, setSelectedPlatformUser] = useState<any>(null);
+  const [showPlatformUserModal, setShowPlatformUserModal] = useState(false);
+  const [statusReason, setStatusReason] = useState("");
+  const [isUpdatingUserStatus, setIsUpdatingUserStatus] = useState(false);
+
+  // Pagination
+  const [shelterPage, setShelterPage] = useState(1);
+  const [petModPage, setPetModPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+
+  // Featured Pet States
+  const [currentFeaturedPet, setCurrentFeaturedPet] = useState<any>(null);
+  const [showPetPicker, setShowPetPicker] = useState(false);
+  const [availablePets, setAvailablePets] = useState<any[]>([]);
+  const [loadingPets, setLoadingPets] = useState(false);
 
   // Add Admin Modal State
   const [showAddAdminModal, setShowAddAdminModal] = useState(false);
@@ -112,6 +146,7 @@ export function AdminDashboard() {
 
   const tabs = [
     { id: "dashboard" as TabType, label: "Dashboard", icon: TrendingUp },
+    { id: "platform_users" as TabType, label: "Platform Users", icon: UserCheck },
     { id: "users" as TabType, label: "Admin Users", icon: Users },
     { id: "shelters" as TabType, label: "Shelters", icon: Building2 },
     { id: "donations" as TabType, label: "Donations", icon: Heart },
@@ -129,23 +164,39 @@ export function AdminDashboard() {
       setIsLoading(true);
       try {
         if (activeTab === "dashboard") {
-          const statsRes = await api.get("/admin/stats");
+          const [statsRes, sheltersRes, petsRes] = await Promise.all([
+            api.get("/admin/stats"),
+            shelters.length === 0 ? api.get("/admin/shelters") : Promise.resolve(null),
+            pendingPets.length === 0 ? api.get("/admin/moderation/pets") : Promise.resolve(null),
+          ]);
           setDashboardStats(statsRes.data);
-          
-          // Also fetch shelters for recent activity activity if not already loaded
-          if (shelters.length === 0) {
-             const sheltersRes = await api.get("/admin/shelters");
-             setShelters(sheltersRes.data);
-          }
+          if (sheltersRes) setShelters(sheltersRes.data);
+          if (petsRes) setPendingPets(petsRes.data);
+        } else if (activeTab === "platform_users") {
+          const res = await api.get("/admin/users");
+          setPlatformUsers(res.data);
         } else if (activeTab === "users") {
           const adminsRes = await api.get("/admin/all");
           setAdmins(adminsRes.data);
         } else if (activeTab === "shelters") {
           const sheltersRes = await api.get("/admin/shelters");
           setShelters(sheltersRes.data);
+          setShelterPage(1);
         } else if (activeTab === "donations") {
-            const donationsRes = await api.get("/admin/donations");
-            setDonations(donationsRes.data);
+          const donationsRes = await api.get("/admin/donations");
+          setDonations(donationsRes.data);
+          try {
+            const featuredRes = await api.get("/donations/featured-pet");
+            if (featuredRes.data.success) {
+              setCurrentFeaturedPet(featuredRes.data.pet);
+            }
+          } catch (e) {
+            setCurrentFeaturedPet(null);
+          }
+        } else if (activeTab === "reports") {
+          const petsRes = await api.get("/admin/moderation/pets");
+          setPendingPets(petsRes.data);
+          setPetModPage(1);
         }
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -185,15 +236,69 @@ export function AdminDashboard() {
 
   const handleVerifyShelter = async (id: string, isVerified: boolean) => {
     try {
-        await api.put(
-            `/admin/shelter/${id}/verify`,
-            { isVerified }
-        );
-        showToast(isVerified ? "Shelter verified successfully" : "Shelter status updated", "success");
-        // Update local state
-        setShelters(shelters.map(s => s._id === id ? { ...s, isVerified } : s));
+      await api.patch(`/admin/shelters/${id}/status`, { isVerified });
+      showToast(isVerified ? "Shelter verified successfully" : "Shelter status updated", "success");
+      setShelters(shelters.map(s => s._id === id ? { ...s, isVerified } : s));
     } catch (error: any) {
-        showToast(error.response?.data?.message || "Failed to update shelter status", "error");
+      showToast(error.response?.data?.message || "Failed to update shelter status", "error");
+    }
+  };
+
+  const handlePetModerationAction = async (petId: string, action: "approve" | "reject") => {
+    try {
+      await api.post(`/pets/admin/review/${petId}`, { action });
+      showToast(`Pet ${action === 'approve' ? 'approved' : 'rejected'} successfully`, "success");
+      setPendingPets(prev => prev.filter(p => p._id !== petId));
+      setSelectedModerationPet(null);
+    } catch (error: any) {
+      showToast(error.response?.data?.message || `Failed to ${action} pet`, "error");
+    }
+  };
+
+  const handleViewUserDetails = async (userId: string) => {
+    try {
+      const res = await api.get(`/admin/users/${userId}`);
+      setSelectedPlatformUser(res.data);
+      setStatusReason("");
+      setShowPlatformUserModal(true);
+    } catch (error) {
+      showToast("Failed to fetch user details", "error");
+    }
+  };
+
+  const handleUserStatusChange = async (userId: string, status: string) => {
+    if (status !== 'active' && !statusReason.trim()) {
+      showToast("A reason is required to issue a warning, suspension, or ban.", "error");
+      return;
+    }
+    
+    setIsUpdatingUserStatus(true);
+    try {
+      await api.patch(`/admin/users/${userId}/status`, {
+        status,
+        statusReason: statusReason.trim()
+      });
+      
+      showToast(`User successfully marked as ${status}`, "success");
+      
+      // Update local state for lists
+      setPlatformUsers(prev => prev.map(u => u._id === userId ? { ...u, status, statusReason } : u));
+      
+      // Update modal state if open
+      if (selectedPlatformUser && selectedPlatformUser.user?._id === userId) {
+        setSelectedPlatformUser({
+          ...selectedPlatformUser,
+          user: { ...selectedPlatformUser.user, status, statusReason }
+        });
+      }
+      
+      setStatusReason("");
+      
+      // Close modal on ban/suspend if desired, or keep it open so they see the badge change
+    } catch (error: any) {
+      showToast(error.response?.data?.message || "Failed to update user status", "error");
+    } finally {
+      setIsUpdatingUserStatus(false);
     }
   };
 
@@ -228,6 +333,40 @@ export function AdminDashboard() {
       }
   };
 
+  const handleOpenPetPicker = async () => {
+    setShowPetPicker(true);
+    setLoadingPets(true);
+    try {
+      const res = await api.get("/donations/pets?limit=50");
+      setAvailablePets(res.data.pets || []);
+    } catch (error) {
+       showToast("Failed to fetch pets", "error");
+    } finally {
+      setLoadingPets(false);
+    }
+  };
+
+  const handleSetFeaturedPet = async (pet: any) => {
+    try {
+       await api.post("/donations/admin/set-featured", { petId: pet._id });
+       showToast(`Set ${pet.name} as featured pet!`, "success");
+       setCurrentFeaturedPet(pet);
+       setShowPetPicker(false);
+    } catch (error) {
+       showToast("Failed to set featured pet", "error");
+    }
+  };
+
+  const handleToggleSetting = async (key: string, value: boolean) => {
+    try {
+      await api.put("/settings", { [key]: value });
+      await refreshSettings();
+      showToast(`${key} is now ${value ? 'enabled' : 'disabled'}`, 'success');
+    } catch (error) {
+      showToast("Failed to update setting", "error");
+    }
+  };
+
   // Helper to format time
   const formatTime = (dateString: string) => {
     if (!dateString) return "Never";
@@ -235,35 +374,51 @@ export function AdminDashboard() {
     return date.toLocaleDateString() + " " + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  // Stats Logic
+  // Stats Logic — 6 KPI cards
   const statsCards = [
     {
       label: "Total Users",
       value: dashboardStats?.totalUsers || 0,
       icon: Users,
-      trend: "Live",
       color: "bg-blue-100 text-blue-600",
+      sub: "Registered adopters",
     },
     {
       label: "Active Shelters",
       value: dashboardStats?.activeShelters || 0,
       icon: Building2,
-      trend: "Live",
       color: "bg-green-100 text-green-600",
+      sub: "Verified & operating",
     },
     {
       label: "Total Pets",
       value: dashboardStats?.totalPets || 0,
       icon: PawPrint,
-      trend: "Live",
       color: "bg-orange-100 text-orange-600",
+      sub: `${dashboardStats?.adoptedPets || 0} adopted`,
     },
     {
       label: "Adoptions",
       value: dashboardStats?.adoptedPets || 0,
       icon: Heart,
-      trend: "Live",
       color: "bg-pink-100 text-pink-600",
+      sub: "Completed adoptions",
+    },
+    {
+      label: "Pending Shelters",
+      value: dashboardStats?.pendingShelters || 0,
+      icon: Clock,
+      color: (dashboardStats?.pendingShelters || 0) > 0 ? "bg-amber-100 text-amber-600" : "bg-gray-100 text-gray-400",
+      sub: "Awaiting verification",
+      urgent: (dashboardStats?.pendingShelters || 0) > 0,
+    },
+    {
+      label: "Pending Pet Reviews",
+      value: dashboardStats?.pendingPetReviews || 0,
+      icon: Flag,
+      color: (dashboardStats?.pendingPetReviews || 0) > 0 ? "bg-red-100 text-red-600" : "bg-gray-100 text-gray-400",
+      sub: "Pets awaiting approval",
+      urgent: (dashboardStats?.pendingPetReviews || 0) > 0,
     },
   ];
 
@@ -274,213 +429,364 @@ export function AdminDashboard() {
       { name: 'Pets', val: dashboardStats?.totalPets || 0 },
       { name: 'Adoptions', val: dashboardStats?.adoptedPets || 0 },
     ];
-
     const COLORS = ['#3b82f6', '#22c55e', '#f97316', '#ec4899'];
-
-    const filteredShelters = shelters.filter(s => {
-      if (shelterFilter === 'verified') return s.isVerified;
-      if (shelterFilter === 'pending') return !s.isVerified;
-      return true;
-    });
+    const pendingSheltersList = shelters.filter(s => !s.isVerified && !s.isSuspended).slice(0, 6);
 
     return (
       <div className="space-y-6">
         {/* Welcome Banner */}
-        <div
-          className="rounded-2xl p-6 text-white shadow-lg relative overflow-hidden"
-          style={{
-            background: "linear-gradient(135deg, var(--color-error) 0%, #dc2626 100%)",
-          }}
-        >
-          <div className="relative z-10">
-            <h2 className="text-xl sm:text-2xl font-bold">
-              Welcome back, {user?.name || "Admin"}! 
-            </h2>
-            <p className="text-white/80 text-sm mt-1">
-              Monitor platform activity and manage system operations
-            </p>
+        <div className="rounded-2xl p-6 text-white shadow-lg relative overflow-hidden"
+          style={{ background: "linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)" }}>
+          <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h2 className="text-xl sm:text-2xl font-bold">Welcome back, {user?.name || "Admin"}!</h2>
+              <p className="text-white/80 text-sm mt-1">Monitor platform activity and manage system operations</p>
+            </div>
           </div>
           <div className="absolute right-0 bottom-0 opacity-10 transform translate-x-1/4 translate-y-1/4">
             <Shield className="w-48 h-48" />
           </div>
         </div>
 
-        {/* Charts & Stats Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Chart */}
-          <Card className="lg:col-span-2 p-6">
-            <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-bold text-gray-900">Platform Analytics</h3>
-                <div className="flex gap-2">
-                    <div className="flex items-center gap-1 text-xs text-gray-500">
-                        <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                        System Healthy
-                    </div>
+        {/* Moderation Alert Banner */}
+        <AdminModerationAlert
+          pendingShelters={dashboardStats?.pendingShelters || 0}
+          pendingPets={dashboardStats?.pendingPetReviews || 0}
+          onViewShelters={() => setActiveTab("shelters")}
+          onViewPets={() => setActiveTab("reports")}
+        />
+
+        {/* 6 KPI Cards Grid */}
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+          {statsCards.map((stat, index) => (
+            <motion.div key={stat.label} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.07 }}>
+              <Card
+                className={`p-4 interactive-card transition-all border ${stat.urgent ? '' : ''}`}
+                style={{
+                  background: "var(--color-card)",
+                  borderColor: stat.urgent ? "rgba(245, 158, 11, 0.4)" : "var(--color-border)",
+                }}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className={`p-2.5 rounded-xl ${stat.color}`}>
+                    <stat.icon className="w-5 h-5" />
+                  </div>
+                  {stat.urgent && (
+                    <span
+                      className="text-xs font-bold px-2 py-0.5 rounded-full animate-pulse"
+                      style={{ background: "rgba(245, 158, 11, 0.15)", color: "#f59e0b" }}
+                    >
+                      Action needed
+                    </span>
+                  )}
                 </div>
+                <p className="text-3xl font-black" style={{ color: "var(--color-text)" }}>{stat.value}</p>
+                <p className="text-sm font-medium mt-0.5" style={{ color: "var(--color-text-light)" }}>{stat.label}</p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--color-text-muted)" }}>{stat.sub}</p>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Chart + System Health */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="lg:col-span-2 p-6" style={{ background: "var(--color-card)", borderColor: "var(--color-border)" }}>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-bold" style={{ color: "var(--color-text)" }}>Platform Analytics</h3>
+              <div className="flex items-center gap-1 text-xs" style={{ color: "var(--color-text-light)" }}>
+                <span className="w-2 h-2 rounded-full" style={{ background: "var(--color-success)" }}></span> Live Data
+              </div>
             </div>
-            <div className="h-[300px] w-full relative min-h-[300px]">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                  <XAxis 
-                    dataKey="name" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: '#6b7280' }} 
-                    dy={10}
+            <div className="h-[260px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#2d3348" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#8892a4' }} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#8892a4' }} />
+                  <Tooltip
+                    cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+                    contentStyle={{
+                      borderRadius: '10px',
+                      background: '#1e2130',
+                      border: '1px solid #2d3348',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                      color: '#e2e8f0',
+                    }}
+                    labelStyle={{ color: '#8892a4', fontWeight: 600 }}
+                    itemStyle={{ color: '#e2e8f0' }}
                   />
-                  <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: '#6b7280' }} 
-                  />
-                  <Tooltip 
-                    cursor={{ fill: '#f3f4f6' }}
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                  />
-                  <Bar dataKey="val" fill="#ef4444" radius={[8, 8, 0, 0]} barSize={50}>
-                    {chartData.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
+                  <Bar dataKey="val" radius={[8, 8, 0, 0]} barSize={50}>
+                    {chartData.map((_, index) => (<Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />))}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </Card>
 
-          {/* Quick Stats & System Health */}
-          <div className="space-y-4">
-             {/* System Health Widget */}
-             <Card className="p-4 bg-gray-900 text-white">
-                <h3 className="font-bold mb-4 flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-green-400" />
-                    System Status
-                </h3>
-                <div className="space-y-3">
-                    <div className="flex justify-between items-center text-sm">
-                        <div className="flex items-center gap-2 text-gray-300">
-                            <Server className="w-4 h-4" />
-                            <span>Server Load</span>
-                        </div>
-                        <span className="text-green-400 font-mono">12%</span>
-                    </div>
-                     <div className="flex justify-between items-center text-sm">
-                        <div className="flex items-center gap-2 text-gray-300">
-                            <Database className="w-4 h-4" />
-                            <span>Database</span>
-                        </div>
-                        <span className="text-green-400 font-mono">Connected</span>
-                    </div>
-                    <div className="flex justify-between items-center text-sm">
-                        <div className="flex items-center gap-2 text-gray-300">
-                            <Clock className="w-4 h-4" />
-                            <span>Uptime</span>
-                        </div>
-                        <span className="text-white font-mono">99.9%</span>
-                    </div>
+          <Card className="p-4" style={{ background: "var(--color-surface)", borderColor: "var(--color-border)" }}>
+            <h3 className="font-bold mb-4 flex items-center gap-2" style={{ color: "var(--color-text)" }}>
+              <Activity className="w-4 h-4" style={{ color: "var(--color-success)" }} /> Platform Overview
+            </h3>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center py-2 border-b" style={{ borderColor: "var(--color-border)" }}>
+                <div className="flex items-center gap-2" style={{ color: "var(--color-text-light)" }}>
+                  <Building2 className="w-4 h-4" />
+                  <span className="text-sm">Pending Shelters</span>
                 </div>
-             </Card>
+                <span className="text-sm font-bold" style={{ color: (dashboardStats?.pendingShelters || 0) > 0 ? "#f59e0b" : "var(--color-success)" }}>
+                  {dashboardStats?.pendingShelters || 0}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b" style={{ borderColor: "var(--color-border)" }}>
+                <div className="flex items-center gap-2" style={{ color: "var(--color-text-light)" }}>
+                  <Flag className="w-4 h-4" />
+                  <span className="text-sm">Pending Pet Reviews</span>
+                </div>
+                <span className="text-sm font-bold" style={{ color: (dashboardStats?.pendingPetReviews || 0) > 0 ? "var(--color-primary)" : "var(--color-success)" }}>
+                  {dashboardStats?.pendingPetReviews || 0}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b" style={{ borderColor: "var(--color-border)" }}>
+                <div className="flex items-center gap-2" style={{ color: "var(--color-text-light)" }}>
+                  <Users className="w-4 h-4" />
+                  <span className="text-sm">Total Users</span>
+                </div>
+                <span className="text-sm font-bold" style={{ color: "var(--color-info)" }}>
+                  {dashboardStats?.totalUsers || 0}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b" style={{ borderColor: "var(--color-border)" }}>
+                <div className="flex items-center gap-2" style={{ color: "var(--color-text-light)" }}>
+                  <PawPrint className="w-4 h-4" />
+                  <span className="text-sm">Total Pets</span>
+                </div>
+                <span className="text-sm font-bold" style={{ color: "var(--color-accent)" }}>
+                  {dashboardStats?.totalPets || 0}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-2">
+                <div className="flex items-center gap-2" style={{ color: "var(--color-text-light)" }}>
+                  <Heart className="w-4 h-4" />
+                  <span className="text-sm">Total Donations</span>
+                </div>
+                <span className="text-sm font-bold" style={{ color: "var(--color-success)" }}>
+                  Rs {(dashboardStats?.totalDonationsAmount || 0).toLocaleString()}
+                </span>
+              </div>
+            </div>
+          </Card>
 
-            {statsCards.map((stat, index) => (
-              <motion.div
-                key={stat.label}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.1 }}
-              >
-                <Card className="p-4 flex items-center gap-4 hover:shadow-md transition-shadow">
-                  <div className={`p-3 rounded-xl ${stat.color}`}>
-                    <stat.icon className="w-6 h-6" />
+        </div>
+
+        {/* Pending Actions Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Pending Shelters */}
+          <Card padding="lg">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+            <div>
+               <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  Pending Shelters
+                  {pendingSheltersList.length > 0 && (
+                     <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-xs font-bold text-amber-600">
+                        {pendingSheltersList.length}
+                     </span>
+                  )}
+               </h2>
+              <p className="text-sm text-gray-500">Awaiting verification</p>
+            </div>
+            <button onClick={() => setActiveTab("shelters")} className="text-sm text-red-600 hover:underline font-medium">View All →</button>
+          </div>
+          <div className="space-y-3">
+            {pendingSheltersList.map((shelter, index) => (
+              <motion.div key={shelter._id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: index * 0.05 }}
+                className="flex items-center gap-4 p-4 rounded-xl bg-gray-50 border border-transparent hover:border-gray-200 hover:bg-white transition-all cursor-pointer"
+                onClick={() => navigate(`/admin/shelter/${shelter._id}`)}>
+                <div className={`p-2.5 rounded-lg shadow-sm ${shelter.isSuspended ? 'bg-red-100 text-red-500' : shelter.isVerified ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <p className="font-semibold text-gray-900 truncate">{shelter.name}</p>
+                    <Badge variant={shelter.isSuspended ? "error" : shelter.isVerified ? "success" : "warning"}>
+                      {shelter.isSuspended ? "Suspended" : shelter.isVerified ? "Verified" : "Pending"}
+                    </Badge>
                   </div>
-                  <div>
-                    <h3 className="text-2xl font-bold text-gray-900">
-                      {stat.value}
-                    </h3>
-                    <p className="text-sm text-gray-500">{stat.label}</p>
+                  <div className="flex items-center gap-3 text-xs text-gray-500">
+                    <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{shelter.city || "—"}</span>
+                    <span className="flex items-center gap-1"><PawPrint className="w-3 h-3" />{shelter.totalPets || 0} pets</span>
+                    <span className="hidden sm:flex items-center gap-1"><Calendar className="w-3 h-3" />{new Date(shelter.createdAt).toLocaleDateString()}</span>
                   </div>
-                </Card>
+                </div>
               </motion.div>
+            ))}
+            {pendingSheltersList.length === 0 && (
+              <div className="text-center py-10">
+                <div className="inline-flex p-4 rounded-full bg-gray-100 mb-3"><Building2 className="w-6 h-6 text-gray-400" /></div>
+                <p className="text-gray-500 font-medium">No pending shelters requiring attention.</p>
+              </div>
+            )}
+          </div>
+        </Card>
+
+        {/* Pending Pet Reviews */}
+        <Card padding="lg">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+            <div>
+               <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  Pending Pet Reviews
+                  {pendingPets.length > 0 && (
+                     <span className={`flex h-5 items-center justify-center rounded-full px-2 text-xs font-bold ${
+                       pendingPets.length > 10 ? 'bg-amber-100 text-amber-600' : 'bg-red-100 text-red-600'
+                     }`}>
+                        {pendingPets.length > 10 ? 'High' : pendingPets.length}
+                     </span>
+                  )}
+               </h2>
+              <p className="text-sm text-gray-500">Awaiting approval to publish</p>
+            </div>
+          </div>
+          <div className="space-y-3">
+            {pendingPets.slice(0, 5).map((pet, index) => (
+              <motion.div key={pet._id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: index * 0.05 }}
+                className="flex items-center gap-4 p-4 rounded-xl bg-gray-50 border border-transparent hover:border-gray-200 hover:bg-white transition-all cursor-pointer"
+                onClick={() => navigate(`/admin/shelter/${pet.shelter?._id}`)}>
+                {pet.images?.[0] ? (
+                  <img src={pet.images[0]} alt={pet.name} className="w-10 h-10 rounded-lg object-cover shadow-sm" />
+                ) : (
+                  <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600 shadow-sm flex-shrink-0">
+                    <PawPrint className="w-5 h-5" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <p className="font-semibold text-gray-900 truncate">{pet.name}</p>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-gray-500">
+                    <span className="flex items-center gap-1 truncate"><Building2 className="w-3 h-3 flex-shrink-0" />{pet.shelter?.name || "—"}</span>
+                    <span className="hidden sm:flex items-center gap-1 flex-shrink-0"><Clock className="w-3 h-3" />{new Date(pet.createdAt).toLocaleDateString()}</span>
+                  </div>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => navigate(`/admin/shelter/${pet.shelter?._id}`)}>
+                  Review
+                </Button>
+              </motion.div>
+            ))}
+            {pendingPets.length === 0 && (
+              <div className="text-center py-10 flex flex-col items-center">
+                <div className="inline-flex p-4 rounded-full bg-gray-100 mb-3"><PawPrint className="w-6 h-6 text-gray-400" /></div>
+                <p className="text-gray-500 font-medium">No pets waiting for review.</p>
+              </div>
+            )}
+          </div>
+        </Card>
+        </div>
+      </div>
+    );
+  };
+
+  const renderPlatformUsers = () => {
+    const filteredUsers = platformUsers.filter(u => {
+      const matchesSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.email?.toLowerCase().includes(searchQuery.toLowerCase()) || u.phone?.includes(searchQuery);
+      const matchesStatus = userStatusFilter === 'all' || u.status === userStatusFilter;
+      return matchesSearch && matchesStatus;
+    });
+
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Platform Users</h2>
+            <p className="text-sm text-gray-500 mt-1">Manage adopters and regular accounts</p>
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1">
+            <Input
+              placeholder="Search users by name, email or phone..."
+              icon={<Search className="w-5 h-5" />}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <div className="flex bg-gray-100 p-1 rounded-xl w-full sm:w-auto overflow-x-auto">
+            {['all', 'active', 'warned', 'suspended', 'banned'].map(status => (
+              <button
+                key={status}
+                onClick={() => setUserStatusFilter(status as any)}
+                className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-medium transition-all capitalize whitespace-nowrap ${
+                  userStatusFilter === status ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {status}
+              </button>
             ))}
           </div>
         </div>
 
-        {/* Recently Registered Shelters */}
-        <Card padding="lg">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">
-                Recently Registered Shelters
-              </h2>
-              <p className="text-sm text-gray-500">Monitor new shelter verifications</p>
-            </div>
-            
-            <div className="flex bg-gray-100 p-1 rounded-xl">
-              {(['all', 'verified', 'pending'] as const).map((filter) => (
-                <button
-                  key={filter}
-                  onClick={() => setShelterFilter(filter)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    shelterFilter === filter
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  {filter.charAt(0).toUpperCase() + filter.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            {filteredShelters.slice(0, 5).map((shelter, index) => (
-              <motion.div
-                key={shelter._id}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.3, delay: index * 0.05 }}
-                className="flex items-center gap-4 p-4 rounded-xl bg-gray-50 border border-transparent hover:border-gray-200 transition-colors"
-                onClick={() => navigate(`/admin/shelter/${shelter._id}`)}
-                role="button"
-              >
-                <div className="p-3 rounded-lg bg-white shadow-sm text-gray-500">
-                  <Building2 className="w-5 h-5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="font-semibold text-gray-900 truncate">
-                      {shelter.name}
-                    </p>
-                    <Badge variant={shelter.isVerified ? "success" : "warning"}>
-                      {shelter.isVerified ? "Verified" : "Pending"}
+        {/* Table */}
+        <Card className="overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="text-left py-4 px-4 text-xs font-semibold text-gray-500 uppercase">User</th>
+                <th className="text-left py-4 px-4 text-xs font-semibold text-gray-500 uppercase">Contact</th>
+                <th className="text-center py-4 px-4 text-xs font-semibold text-gray-500 uppercase">Apps</th>
+                <th className="text-center py-4 px-4 text-xs font-semibold text-gray-500 uppercase">Donated</th>
+                <th className="text-left py-4 px-4 text-xs font-semibold text-gray-500 uppercase">Status</th>
+                <th className="text-right py-4 px-4 text-xs font-semibold text-gray-500 uppercase">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {filteredUsers.map(u => (
+                <tr key={u._id} className="hover:bg-gray-50 transition-colors">
+                  <td className="py-3 px-4">
+                    <div className="flex items-center gap-3">
+                      {u.profileImage ? (
+                        <img src={u.profileImage} alt="" className="w-10 h-10 rounded-full object-cover" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-600 font-bold min-w-[40px]">
+                          {u.name?.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div>
+                        <p className="font-medium text-gray-900">{u.name}</p>
+                        <p className="text-xs text-gray-500">Joined {new Date(u.createdAt).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-3 px-4">
+                    <p className="text-sm text-gray-600">{u.email}</p>
+                    <p className="text-xs text-gray-500">{u.phone}</p>
+                  </td>
+                  <td className="py-3 px-4 text-center">
+                    <span className="font-medium text-gray-900">{u.applicationsCount || 0}</span>
+                  </td>
+                  <td className="py-3 px-4 text-center">
+                    <span className="font-medium text-gray-900">Rs. {u.totalDonated?.toLocaleString() || 0}</span>
+                  </td>
+                  <td className="py-3 px-4">
+                    <Badge variant={u.status === 'active' ? 'success' : u.status === 'warned' ? 'warning' : 'error'}>
+                      {u.status?.toUpperCase() || 'ACTIVE'}
                     </Badge>
-                  </div>
-                  <div className="flex items-center gap-4 text-sm text-gray-500">
-                    <span className="flex items-center gap-1">
-                      <User className="w-3 h-3" />
-                      {shelter.contactPerson}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Mail className="w-3 h-3" />
-                      {shelter.email}
-                    </span>
-                    <span className="hidden sm:flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
-                      {new Date(shelter.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-            
-            {filteredShelters.length === 0 && (
-              <div className="text-center py-12">
-                <div className="inline-flex p-4 rounded-full bg-gray-100 mb-3">
-                  <Filter className="w-6 h-6 text-gray-400" />
-                </div>
-                <p className="text-gray-500 font-medium">No shelters found matching this filter.</p>
-              </div>
-            )}
-          </div>
+                  </td>
+                  <td className="py-3 px-4 text-right">
+                    <Button variant="outline" size="sm" onClick={() => handleViewUserDetails(u._id)}>
+                       Manage
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+              {filteredUsers.length === 0 && (
+                 <tr>
+                    <td colSpan={6} className="py-10 text-center text-gray-500">No users found matching your filters.</td>
+                 </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
         </Card>
       </div>
     );
@@ -501,7 +807,7 @@ export function AdminDashboard() {
             icon={<Plus className="w-4 h-4" />}
             onClick={() => setShowAddAdminModal(true)}
             style={{
-                background: "linear-gradient(135deg, var(--color-error) 0%, #dc2626 100%)",
+                background: "linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)",
             }}
             >
             Add Admin
@@ -619,266 +925,210 @@ export function AdminDashboard() {
     </div>
   );
 
-  const renderSheltersGrid = () => (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {shelters.map((shelter) => (
-        <Card key={shelter._id} className="overflow-hidden hover:shadow-md transition-shadow">
-          <div className="relative h-48 bg-gray-100">
-            {shelter.coverImage ? (
-                <img 
-                    src={shelter.coverImage} 
-                    alt={shelter.name}
-                    className="w-full h-full object-cover"
-                />
-            ) : (
-                <div className="w-full h-full flex items-center justify-center bg-gray-100 text-gray-400">
-                    <Building2 className="w-12 h-12" />
-                </div>
-            )}
-            <div className="absolute top-4 right-4">
-                <Badge variant={shelter.isVerified ? "success" : "warning"}>
-                    {shelter.isVerified ? "Verified" : "Pending"}
-                </Badge>
-            </div>
-          </div>
-          
-          <div className="p-5">
-            <h3 className="text-lg font-bold text-gray-900 mb-1">{shelter.name}</h3>
-            <div className="flex items-center text-sm text-gray-500 mb-4">
-                <MapPin className="w-4 h-4 mr-1" />
-                {shelter.city || "Unknown City"}, {shelter.state || "State"}
-            </div>
-            
-            <div className="space-y-2 text-sm text-gray-600 mb-4">
-                <div className="flex items-center">
-                    <User className="w-4 h-4 mr-2 text-gray-400" />
-                    {shelter.contactPerson || "No contact person"}
-                </div>
-                <div className="flex items-center">
-                    <Phone className="w-4 h-4 mr-2 text-gray-400" />
-                    {shelter.phone || "No phone"}
-                </div>
-                <div className="flex items-center">
-                    <Calendar className="w-4 h-4 mr-2 text-gray-400" />
-                    Since {new Date(shelter.createdAt).toLocaleDateString()}
-                </div>
-            </div>
+  const renderShelters = () => {
+    const filtered = shelters.filter(s => {
+      const matchesSearch = !searchQuery ||
+        s.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.city?.toLowerCase().includes(searchQuery.toLowerCase());
 
-            <div className="pt-4 border-t border-gray-100 flex justify-between items-center">
-                 <div className="text-sm font-medium text-gray-900">
-                    {shelter.totalPets || 0} Pets
-                 </div>
-                 
-                 <div className="flex gap-2">
-                    {!shelter.isVerified && (
-                        <button
-                            onClick={() => handleVerifyShelter(shelter._id, true)}
-                            className="p-2 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 transition-colors"
-                            title="Verify Shelter"
-                        >
-                            <CheckCircle className="w-4 h-4" />
-                        </button>
-                    )}
-                    <button
-                        onClick={() => navigate(`/admin/shelter/${shelter._id}`, { state: { activeTab: "shelters" } })}
-                         className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
-                         title="View Details"
-                    >
-                        <Eye className="w-4 h-4" />
-                    </button>
-                 </div>
-            </div>
+      const matchesFilter =
+        shelterFilter === 'all' ||
+        (shelterFilter === 'verified' && s.isVerified && !s.isSuspended) ||
+        (shelterFilter === 'pending' && !s.isVerified && !s.isSuspended) ||
+        (shelterFilter === 'suspended' && s.isSuspended);
+
+      return matchesSearch && matchesFilter;
+    });
+
+    const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+    const paginated = filtered.slice((shelterPage - 1) * ITEMS_PER_PAGE, shelterPage * ITEMS_PER_PAGE);
+
+    const filterCounts = {
+      all: shelters.length,
+      verified: shelters.filter(s => s.isVerified && !s.isSuspended).length,
+      pending: shelters.filter(s => !s.isVerified && !s.isSuspended).length,
+      suspended: shelters.filter(s => s.isSuspended).length,
+    };
+
+    const filterConfig = [
+      { key: 'all', label: 'All', color: '' },
+      { key: 'verified', label: 'Verified', color: 'text-green-600' },
+      { key: 'pending', label: 'Pending', color: 'text-amber-600' },
+      { key: 'suspended', label: 'Suspended', color: 'text-red-600' },
+    ] as const;
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Shelter Monitoring</h2>
+            <p className="text-sm text-gray-500 mt-1">Monitor and manage all registered shelters</p>
           </div>
-        </Card>
-      ))}
-       {shelters.length === 0 && (
-          <div className="col-span-full py-12 text-center text-gray-500 bg-white rounded-2xl border border-dashed border-gray-300">
-            No shelters found matching your search.
+          <div className="flex bg-gray-100 p-1 rounded-lg">
+            <button onClick={() => setViewMode('list')} className={`p-2 rounded-md transition-all ${viewMode === 'list' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`} title="List View"><List className="w-5 h-5" /></button>
+            <button onClick={() => setViewMode('grid')} className={`p-2 rounded-md transition-all ${viewMode === 'grid' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`} title="Grid View"><LayoutGrid className="w-5 h-5" /></button>
+          </div>
+        </div>
+
+        {/* Status Filter Pills */}
+        <div className="flex flex-wrap gap-2">
+          {filterConfig.map(({ key, label, color }) => (
+            <button key={key}
+              onClick={() => { setShelterFilter(key); setShelterPage(1); }}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-all ${
+                shelterFilter === key
+                  ? 'bg-gray-900 text-white border-gray-900'
+                  : 'bg-white border-gray-200 text-gray-500 hover:border-gray-400'
+              }`}>
+              {label}
+              <span className={`ml-1.5 text-xs ${shelterFilter === key ? 'opacity-70' : color}`}>
+                ({filterCounts[key]})
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {/* Search */}
+        <Input placeholder="Search by name, email, or city..." icon={<Search className="w-5 h-5" />}
+          value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+
+        {/* Table or Grid */}
+        {viewMode === 'grid' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {paginated.map((shelter) => (
+              <Card key={shelter._id} className={`overflow-hidden hover:shadow-md transition-shadow border-l-4 ${shelter.isSuspended ? 'border-l-red-400' : shelter.isVerified ? 'border-l-green-400' : 'border-l-amber-400'}`}>
+                <div className="relative h-36 bg-gray-100">
+                  {shelter.coverImage ? <img src={shelter.coverImage} alt={shelter.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-gray-400"><Building2 className="w-10 h-10" /></div>}
+                  <div className="absolute top-3 right-3">
+                    <Badge variant={shelter.isSuspended ? "error" : shelter.isVerified ? "success" : "warning"}>
+                      {shelter.isSuspended ? "Suspended" : shelter.isVerified ? "Verified" : "Pending"}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="p-4">
+                  <h3 className="font-bold text-gray-900 mb-1">{shelter.name}</h3>
+                  <div className="text-xs text-gray-500 space-y-1 mb-3">
+                    <div className="flex items-center gap-1 text-gray-500 mb-1">
+                      <MapPin className="w-3 h-3" />
+                      <span className="truncate">
+                        {shelter.city ? `${shelter.city}${shelter.state ? `, ${shelter.state}` : ''}` : (shelter.address || shelter.location?.formattedAddress || "—")}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1"><PawPrint className="w-3 h-3" />{shelter.totalPets || 0} pets listed</div>
+                      {shelter.pendingPetsCount > 0 && (
+                        <span className="flex items-center gap-1 text-[10px] font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded-full border border-red-100">
+                          <span className="relative flex h-1.5 w-1.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500"></span>
+                          </span>
+                          {shelter.pendingPetsCount} NEW
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <button onClick={() => navigate(`/admin/shelter/${shelter._id}`)}
+                    className="w-full text-center text-sm font-medium text-red-600 hover:text-red-700 border border-red-200 hover:bg-red-50 rounded-lg py-1.5 transition-colors">
+                    Review Shelter
+                  </button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Card className="overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    {['Shelter', 'Location', 'Contact', 'Pets', 'Status', 'Joined'].map(h => (
+                      <th key={h} className="py-3 px-4 text-xs font-semibold text-gray-500 uppercase text-left">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {paginated.map((shelter) => (
+                    <tr key={shelter._id} 
+                      onClick={() => navigate(`/admin/shelter/${shelter._id}`)}
+                      className="hover:bg-red-50/30 transition-colors cursor-pointer group"
+                    >
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-8 rounded-full flex-shrink-0 ${shelter.isSuspended ? 'bg-red-400' : shelter.isVerified ? 'bg-green-400' : 'bg-amber-400'}`} />
+                          <span className="font-medium text-gray-900">{shelter.name}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-gray-500">
+                        {shelter.city ? `${shelter.city}${shelter.state ? `, ${shelter.state}` : ''}` : (shelter.address || "—")}
+                      </td>
+                      <td className="py-3 px-4 text-gray-500">{shelter.email}</td>
+                      <td className="py-3 px-4 text-gray-700 font-medium">
+                        <div className="flex items-center gap-2">
+                          {shelter.totalPets || 0}
+                          {shelter.pendingPetsCount > 0 && (
+                            <span className="flex items-center gap-1 text-[10px] font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded-full border border-red-100">
+                              <span className="relative flex h-1.5 w-1.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500"></span>
+                              </span>
+                              {shelter.pendingPetsCount} PENDING
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <Badge variant={shelter.isSuspended ? "error" : shelter.isVerified ? "success" : "warning"}>
+                          {shelter.isSuspended ? "Suspended" : shelter.isVerified ? "Verified" : "Pending"}
+                        </Badge>
+                      </td>
+                      <td className="py-3 px-4 text-gray-500">{new Date(shelter.createdAt).toLocaleDateString()}</td>
+                    </tr>
+                  ))}
+                  {paginated.length === 0 && (
+                    <tr><td colSpan={6} className="text-center py-12 text-gray-400">
+                      <div className="flex flex-col items-center gap-2">
+                        <Building2 className="w-8 h-8 text-gray-300" />
+                        <p>No shelters match your current filter.</p>
+                      </div>
+                    </td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-500">Showing {Math.min((shelterPage - 1) * ITEMS_PER_PAGE + 1, filtered.length)}–{Math.min(shelterPage * ITEMS_PER_PAGE, filtered.length)} of {filtered.length}</p>
+            <div className="flex gap-1">
+              <button onClick={() => setShelterPage(p => Math.max(1, p - 1))} disabled={shelterPage === 1}
+                className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => (
+                <button key={i + 1} onClick={() => setShelterPage(i + 1)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${shelterPage === i + 1 ? 'bg-gray-900 text-white' : 'border border-gray-200 hover:bg-gray-50'}`}>
+                  {i + 1}
+                </button>
+              ))}
+              <button onClick={() => setShelterPage(p => Math.min(totalPages, p + 1))} disabled={shelterPage === totalPages}
+                className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         )}
-    </div>
-  );
-
-  const renderShelters = () => (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Shelter Monitoring</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Monitor and manage all registered shelters
-          </p>
-        </div>
-        
-        <div className="flex bg-gray-100 p-1 rounded-lg">
-            <button
-                onClick={() => setViewMode('list')}
-                className={`p-2 rounded-md transition-all ${viewMode === 'list' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-                title="List View"
-            >
-                <List className="w-5 h-5" />
-            </button>
-            <button
-                onClick={() => setViewMode('grid')}
-                className={`p-2 rounded-md transition-all ${viewMode === 'grid' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-                title="Grid View"
-            >
-                <LayoutGrid className="w-5 h-5" />
-            </button>
-        </div>
       </div>
+    );
+  };
 
-      {/* Search */}
-      <Input
-        placeholder="Search shelters..."
-        icon={<Search className="w-5 h-5" />}
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-      />
 
-      {/* View Content */}
-      {viewMode === 'grid' ? (
-        renderSheltersGrid()
-      ) : (
-        <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">
-                  Shelter Name
-                </th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">
-                  Contact Person
-                </th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">
-                  Email
-                </th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">
-                  Status
-                </th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">
-                  Active Since
-                </th>
-                <th className="text-right py-3 px-4 text-xs font-semibold text-gray-500 uppercase">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {shelters
-                .filter(s => 
-                    s.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                    s.email?.toLowerCase().includes(searchQuery.toLowerCase())
-                )
-                .map((shelter) => (
-                <tr key={shelter._id} className="hover:bg-gray-50 transition-colors">
-                  <td className="py-3 px-4">
-                    <span className="font-medium text-gray-900">{shelter.name}</span>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className="text-gray-600">{shelter.contactPerson}</span>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className="text-gray-600">{shelter.email}</span>
-                  </td>
-                  <td className="py-3 px-4">
-                    <Badge variant={shelter.isVerified ? "success" : "warning"}>
-                      {shelter.isVerified ? "Verified" : "Pending"}
-                    </Badge>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className="text-sm text-gray-500">
-                      {new Date(shelter.createdAt).toLocaleDateString()}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <button 
-                        onClick={() => navigate(`/admin/shelter/${shelter._id}`)}
-                        className="p-2 rounded-lg text-gray-500 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                        title="View Shelter Details"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-      )}
-    </div>
-  );
 
-  const renderDonations = () => (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Donation History</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Track all financial contributions to the platform
-          </p>
-        </div>
-        <div className="bg-green-50 text-green-700 px-3 py-1 rounded-lg text-sm font-medium border border-green-100">
-             Total Raised: Rs {donations.filter(d => d.status === 'completed').reduce((acc, curr) => acc + curr.amount, 0).toLocaleString()}
-        </div>
-      </div>
 
-       <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="text-left py-3 px-4 font-semibold text-gray-500 uppercase">Date</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-500 uppercase">Donor</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-500 uppercase">Amount</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-500 uppercase">Status</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-500 uppercase">Transaction ID</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-500 uppercase">Method</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {donations.map((donation) => (
-                <tr key={donation._id} className="hover:bg-gray-50 transition-colors">
-                  <td className="py-3 px-4 text-gray-600">
-                    {new Date(donation.createdAt).toLocaleDateString()}
-                    <span className="block text-xs text-gray-400">{new Date(donation.createdAt).toLocaleTimeString()}</span>
-                  </td>
-                  <td className="py-3 px-4 font-medium text-gray-900">
-                    {donation.donorName || "Anonymous"}
-                    <span className="block text-xs text-gray-500">{donation.donorEmail}</span>
-                  </td>
-                  <td className="py-3 px-4 font-bold text-gray-900">
-                    Rs {donation.amount.toLocaleString()}
-                  </td>
-                  <td className="py-3 px-4">
-                     <Badge variant={donation.status === 'completed' ? 'success' : donation.status === 'pending' ? 'warning' : 'error'}>
-                        {donation.status.toUpperCase()}
-                     </Badge>
-                  </td>
-                  <td className="py-3 px-4 font-mono text-xs text-gray-500">
-                    {donation.transactionUuid}
-                  </td>
-                   <td className="py-3 px-4 uppercase text-xs font-semibold text-gray-500">
-                    {donation.paymentMethod}
-                  </td>
-                </tr>
-              ))}
-               {donations.length === 0 && (
-                  <tr>
-                      <td colSpan={6} className="text-center py-8 text-gray-500">
-                          No donations found yet.
-                      </td>
-                  </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-      </div>
-  );
+  const renderDonations = () => <AdminDonations />;
 
   const renderAuditLogs = () => (
     <div className="space-y-6">
@@ -1023,7 +1273,7 @@ export function AdminDashboard() {
                 <Button 
                     variant="primary" 
                     type="submit"
-                    style={{ background: "linear-gradient(135deg, var(--color-error) 0%, #dc2626 100%)" }}
+                    style={{ background: "linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)" }}
                 >
                     Save Changes
                 </Button>
@@ -1053,6 +1303,27 @@ export function AdminDashboard() {
                     </div>
                 </div>
             ))}
+         </div>
+      </Card>
+
+      <Card padding="lg">
+         <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <SettingsIcon className="w-5 h-5 text-gray-500" />
+            System Features
+         </h3>
+         <div className="space-y-4">
+              <div className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0 hover:bg-gray-50 px-2 rounded-lg transition-colors">
+                  <div>
+                      <p className="font-medium text-gray-900">Compatibility Intelligence</p>
+                      <p className="text-xs text-gray-500">Enable compatability matching scores between adopters and pets.</p>
+                  </div>
+                  <div 
+                      onClick={() => handleToggleSetting("compatibilityIntelligenceEnabled", !settings.compatibilityIntelligenceEnabled)}
+                      className={`w-11 h-6 rounded-full relative cursor-pointer transition-colors ${settings.compatibilityIntelligenceEnabled ? "bg-green-500" : "bg-gray-300"}`}
+                  >
+                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${settings.compatibilityIntelligenceEnabled ? "translate-x-6 right-auto" : "translate-x-1 left-0"}`}></div>
+                  </div>
+              </div>
          </div>
       </Card>
     </div>
@@ -1192,7 +1463,7 @@ export function AdminDashboard() {
   );
 
   return (
-    <div className="flex min-h-screen bg-[var(--color-background)]">
+    <div className="admin-layout flex min-h-screen">
       <div className="hidden lg:block">
         <AdminSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
       </div>
@@ -1257,6 +1528,7 @@ export function AdminDashboard() {
             ) : (
                 <>
                 {activeTab === "dashboard" && renderDashboard()}
+                {activeTab === "platform_users" && renderPlatformUsers()}
                 {activeTab === "users" && renderAdminUsers()}
                 {activeTab === "shelters" && renderShelters()}
                 {activeTab === "donations" && renderDonations()}
@@ -1269,6 +1541,118 @@ export function AdminDashboard() {
           </div>
         </main>
       </div>
+
+       {/* Platform User Detail Modal */}
+       <AnimatePresence>
+        {showPlatformUserModal && selectedPlatformUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-3xl bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="px-6 py-4 border-b flex justify-between items-center bg-gray-50">
+                <h3 className="text-lg font-bold text-gray-900">User Profile & Activity</h3>
+                <button onClick={() => setShowPlatformUserModal(false)} className="p-2 hover:bg-gray-200 rounded-full"><X className="w-5 h-5"/></button>
+              </div>
+              
+              <div className="p-6 overflow-y-auto">
+                {/* Profile Header */}
+                <div className="flex items-start gap-6 border-b pb-6 mb-6">
+                  {selectedPlatformUser.user?.profileImage ? (
+                      <img src={selectedPlatformUser.user.profileImage} alt="" className="w-20 h-20 rounded-full object-cover shadow-sm" />
+                  ) : (
+                      <div className="w-20 h-20 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-2xl font-bold shadow-sm">
+                        {selectedPlatformUser.user?.name?.charAt(0).toUpperCase()}
+                      </div>
+                  )}
+                  <div className="flex-1">
+                      <div className="flex justify-between items-start">
+                        <div>
+                            <h2 className="text-2xl font-bold text-gray-900">{selectedPlatformUser.user?.name}</h2>
+                            <div className="flex items-center gap-4 text-sm text-gray-500 mt-2">
+                              <span className="flex items-center gap-1"><Mail className="w-4 h-4"/> {selectedPlatformUser.user?.email}</span>
+                              <span className="flex items-center gap-1"><Phone className="w-4 h-4"/> {selectedPlatformUser.user?.phone}</span>
+                            </div>
+                        </div>
+                        <Badge variant={selectedPlatformUser.user?.status === 'active' ? 'success' : selectedPlatformUser.user?.status === 'warned' ? 'warning' : 'error'}>
+                            {selectedPlatformUser.user?.status?.toUpperCase()}
+                        </Badge>
+                      </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Account Actions Section */}
+                  <div>
+                      <h4 className="font-bold text-gray-900 mb-4 border-b pb-2">Account Actions</h4>
+                      <div className="bg-gray-50 p-5 rounded-xl border border-gray-100 space-y-5">
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">Reason for Status Change</label>
+                            <Input placeholder="E.g., Fraudulent applications, spam, etc." value={statusReason} onChange={e => setStatusReason(e.target.value)} />
+                            <p className="text-xs text-gray-500 mt-1">Required when issuing a warning, suspension or ban.</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2 pt-2">
+                            <Button variant={selectedPlatformUser.user?.status === 'active' ? 'primary' : 'outline'} size="sm" onClick={() => handleUserStatusChange(selectedPlatformUser.user?._id, 'active')} disabled={isUpdatingUserStatus}>Set Active</Button>
+                            <Button variant="outline" size="sm" className="text-amber-600 border-amber-200 hover:bg-amber-50" onClick={() => handleUserStatusChange(selectedPlatformUser.user?._id, 'warned')} disabled={isUpdatingUserStatus}>Warn</Button>
+                            <Button variant="outline" size="sm" className="text-orange-600 border-orange-200 hover:bg-orange-50" onClick={() => handleUserStatusChange(selectedPlatformUser.user?._id, 'suspended')} disabled={isUpdatingUserStatus}>Suspend</Button>
+                            <Button variant="outline" size="sm" className="border-red-200 hover:bg-red-50 text-red-600" onClick={() => handleUserStatusChange(selectedPlatformUser.user?._id, 'banned')} disabled={isUpdatingUserStatus}>Ban Account</Button>
+                        </div>
+                        {selectedPlatformUser.user?.status !== 'active' && (
+                            <div className="mt-4 p-3 bg-red-50 text-red-800 text-sm rounded-lg border border-red-100 flex items-start gap-2">
+                              <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                              <div>
+                                  <p className="font-semibold capitalize">Currently {selectedPlatformUser.user?.status}</p>
+                                  <p className="mt-1 font-medium">{selectedPlatformUser.user?.statusReason}</p>
+                                  <p className="mt-1 text-xs opacity-80">By {selectedPlatformUser.user?.statusUpdatedBy?.name || 'Admin'} on {new Date(selectedPlatformUser.user?.statusUpdatedAt).toLocaleDateString()}</p>
+                              </div>
+                            </div>
+                        )}
+                      </div>
+                  </div>
+
+                  {/* Activity Overview Section */}
+                  <div>
+                      <h4 className="font-bold text-gray-900 mb-4 border-b pb-2">Activity Overview</h4>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center p-4 bg-white border border-gray-100 rounded-xl shadow-sm">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 bg-blue-50 rounded-lg text-blue-600"><FileText className="w-5 h-5"/></div>
+                              <span className="font-medium text-gray-700">Adoption Apps Sent</span>
+                            </div>
+                            <span className="text-xl font-bold text-gray-900">{selectedPlatformUser.user?.applicationsSent?.length || 0}</span>
+                        </div>
+                        <div className="flex justify-between items-center p-4 bg-white border border-gray-100 rounded-xl shadow-sm">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 bg-green-50 rounded-lg text-green-600"><Heart className="w-5 h-5"/></div>
+                              <span className="font-medium text-gray-700">Total Funds Donated</span>
+                            </div>
+                            <span className="text-xl font-bold text-gray-900">Rs. {selectedPlatformUser.totalDonated?.toLocaleString() || 0}</span>
+                        </div>
+                      </div>
+
+                      {selectedPlatformUser.user?.applicationsSent?.length > 0 && (
+                        <div className="mt-6">
+                            <h5 className="text-sm font-bold text-gray-900 mb-3 uppercase tracking-wider">Recent Applications</h5>
+                            <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
+                              {selectedPlatformUser.user.applicationsSent.slice(0, 5).map((app: any) => (
+                                  <div key={app._id} className="p-3 bg-gray-50 rounded-lg border border-gray-100 text-sm flex justify-between items-center">
+                                    <div>
+                                        <p className="font-medium text-gray-900">Pet: {app.pet?.name || 'Unknown'}</p>
+                                        <p className="text-xs text-gray-500">{new Date(app.createdAt).toLocaleDateString()}</p>
+                                    </div>
+                                    <Badge variant={app.status === 'approved' ? 'success' : app.status === 'rejected' ? 'error' : 'neutral'}>
+                                        {app.status}
+                                    </Badge>
+                                  </div>
+                              ))}
+                            </div>
+                        </div>
+                      )}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+       </AnimatePresence>
 
        {/* Add Admin Modal */}
        {showAddAdminModal && (
@@ -1344,7 +1728,7 @@ export function AdminDashboard() {
                     variant="primary" 
                     className="flex-1"
                     style={{
-                        background: "linear-gradient(135deg, var(--color-error) 0%, #dc2626 100%)",
+                        background: "linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)",
                     }}
                 >
                     Create Admin
@@ -1354,6 +1738,58 @@ export function AdminDashboard() {
           </motion.div>
         </div>
       )}
+
+      {/* Pet Picker Modal */}
+      <AnimatePresence>
+       {showPetPicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="w-full max-w-4xl bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[85vh]"
+          >
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+               <div>
+                  <h3 className="text-lg font-bold text-gray-900">Select Featured Pet</h3>
+                  <p className="text-sm text-gray-500">Pick a pet to highlight on the public Donate page.</p>
+               </div>
+              <button onClick={() => setShowPetPicker(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+               {loadingPets ? (
+                 <div className="flex justify-center p-12"><LoadingSpinner size="lg" /></div>
+               ) : availablePets.length === 0 ? (
+                 <div className="text-center py-12 text-gray-500">
+                    <PawPrint className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                    No pets available for donation.
+                 </div>
+               ) : (
+                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {availablePets.map(pet => (
+                       <button key={pet._id} onClick={() => handleSetFeaturedPet(pet)} className="bg-white rounded-xl overflow-hidden border-2 border-transparent hover:border-red-400 hover:shadow-md transition-all text-left flex flex-col relative group" style={{ borderColor: currentFeaturedPet?._id === pet._id ? "#ef4444" : "transparent" }}>
+                          {currentFeaturedPet?._id === pet._id && (
+                             <div className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 z-10"><CheckCircle className="w-4 h-4" /></div>
+                          )}
+                          <div className="h-32 relative overflow-hidden bg-gray-100">
+                             <img src={pet.images?.[0] || "/rescue-hero.png"} alt={pet.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                          </div>
+                          <div className="p-3">
+                             <h4 className="font-bold text-gray-900 truncate">{pet.name}</h4>
+                             <p className="text-xs text-gray-500 truncate mt-0.5">{pet.shelter?.name}</p>
+                             <div className="text-[10px] mt-2 text-gray-400 font-bold uppercase tracking-wider">{pet.species}</div>
+                          </div>
+                      </button>
+                    ))}
+                 </div>
+               )}
+            </div>
+          </motion.div>
+        </div>
+       )}
+      </AnimatePresence>
     </div>
   );
 }

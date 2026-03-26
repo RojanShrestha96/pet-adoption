@@ -1,6 +1,9 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { SocketProvider } from "./contexts/SocketContext";
+import { SettingsProvider } from "./contexts/SettingsContext";
+import { AdopterProfileProvider } from "./contexts/AdopterProfileContext";
+import { NotificationProvider } from "./contexts/NotificationContext";
 import { Navbar } from "./components/layout/Navbar";
 import { Footer } from "./components/layout/Footer";
 import { Chatbot } from "./components/messaging/Chatbot";
@@ -46,15 +49,22 @@ import { AdminLoginPage } from "./pages/admin/AdminLoginPage";
 import { AdminShelterDetailsPage } from "./pages/admin/AdminShelterDetailsPage";
 import { PaymentSuccess } from "./pages/public/PaymentSuccess";
 import { PaymentFailure } from "./pages/public/PaymentFailure";
+import { ScrollToTop } from "./components/layout/ScrollToTop";
+import { GeoTestPage } from "./pages/public/GeoTestPage";
+
 export function App() {
   return (
     <ToastProvider>
       <ThemeProvider>
         <AuthProvider>
-          <SocketProvider>
-            <BrowserRouter>
-              {/* Global Chatbot */}
-              <Chatbot />
+          <AdopterProfileProvider>
+            <SettingsProvider>
+              <NotificationProvider>
+                <SocketProvider>
+                <BrowserRouter>
+                <ScrollToTop />
+                {/* Global Chatbot */}
+                <Chatbot />
 
               <Routes>
                 {/* ================= PUBLIC ROUTES ================= */}
@@ -210,6 +220,10 @@ export function App() {
                 <Route
                   path="/success-stories"
                   element={<SuccessStoriesPage />}
+                />
+                <Route
+                  path="/geo-test"
+                  element={<GeoTestPage />}
                 />
 
                 {/* ================= ADOPTER ONLY ROUTES ================= */}
@@ -389,7 +403,10 @@ export function App() {
                 />
               </Routes>
             </BrowserRouter>
-          </SocketProvider>
+              </SocketProvider>
+            </NotificationProvider>
+            </SettingsProvider>
+          </AdopterProfileProvider>
         </AuthProvider>
       </ThemeProvider>
     </ToastProvider>

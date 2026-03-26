@@ -10,14 +10,15 @@ import {
   Phone,
   Mail,
   ArrowLeft,
-  Home,
   Users,
-  PawPrint,
   Activity,
   Ruler,
   Loader2,
   AlertCircle,
   Dna,
+  AlertTriangle,
+  CheckCircle,
+  ShieldCheck,
 } from "lucide-react";
 import { PetGallery } from "../../components/pets/PetGallery";
 import { Badge } from "../../components/ui/Badge";
@@ -55,6 +56,8 @@ export function PetDetailPage() {
   // Check if user has already applied
   const [hasApplied, setHasApplied] = useState(false);
   const [applicationId, setApplicationId] = useState<string | null>(null);
+
+
 
   useEffect(() => {
     const checkApplication = async () => {
@@ -141,8 +144,12 @@ export function PetDetailPage() {
 
     fetchPet();
   }, [id]);
+
+
   
   const handleAdoptClick = () => {
+    if (user?.status === 'suspended') return; // Restriction check
+
     if (hasApplied && applicationId) {
       navigate(`/application-tracking/${applicationId}`);
     } else if (hasApplied) {
@@ -398,149 +405,46 @@ export function PetDetailPage() {
               </div>
             </motion.div>
 
-            {/* Compatibility */}
+            {/* COMPATIBILITY PREVIEW CARD & REQUIREMENTS GRID */}
             <motion.div
-              initial={{
-                opacity: 0,
-                y: 20,
-              }}
-              animate={{
-                opacity: 1,
-                y: 0,
-              }}
-              transition={{
-                duration: 0.5,
-                delay: 0.3,
-              }}
-              className="p-6"
-              style={{
-                background: "var(--color-card)",
-                borderRadius: "var(--radius-lg)",
-                boxShadow: "var(--shadow-sm)",
-              }}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+              className="space-y-6"
             >
-              <h3
-                className="text-xl font-bold mb-6"
-                style={{
-                  color: "var(--color-text)",
-                }}
-              >
-                Compatibility & Home Requirements
-              </h3>
-              <div className="grid grid-cols-3 gap-6">
-                <div className="text-center">
-                  <div
-                    className="w-20 h-20 rounded-full mx-auto mb-3 flex items-center justify-center"
-                    style={{
-                      background: pet.compatibility.kids
-                        ? "var(--color-success)"
-                        : "var(--color-error)",
-                      opacity: 0.15,
-                    }}
-                  >
-                    <Users
-                      className="w-10 h-10"
-                      style={{
-                        color: pet.compatibility.kids
-                          ? "var(--color-success)"
-                          : "var(--color-error)",
-                      }}
-                    />
-                  </div>
-                  <p
-                    className="font-semibold mb-1"
-                    style={{
-                      color: "var(--color-text)",
-                    }}
-                  >
-                    Good with Kids
-                  </p>
-                  <p
-                    className="text-sm font-medium"
-                    style={{
-                      color: pet.compatibility.kids
-                        ? "var(--color-success)"
-                        : "var(--color-error)",
-                    }}
-                  >
-                    {pet.compatibility.kids ? "Yes" : "No"}
-                  </p>
-                </div>
-                <div className="text-center">
-                  <div
-                    className="w-20 h-20 rounded-full mx-auto mb-3 flex items-center justify-center"
-                    style={{
-                      background: pet.compatibility.pets
-                        ? "var(--color-success)"
-                        : "var(--color-error)",
-                      opacity: 0.15,
-                    }}
-                  >
-                    <PawPrint
-                      className="w-10 h-10"
-                      style={{
-                        color: pet.compatibility.pets
-                          ? "var(--color-success)"
-                          : "var(--color-error)",
-                      }}
-                    />
-                  </div>
-                  <p
-                    className="font-semibold mb-1"
-                    style={{
-                      color: "var(--color-text)",
-                    }}
-                  >
-                    Good with Pets
-                  </p>
-                  <p
-                    className="text-sm font-medium"
-                    style={{
-                      color: pet.compatibility.pets
-                        ? "var(--color-success)"
-                        : "var(--color-error)",
-                    }}
-                  >
-                    {pet.compatibility.pets ? "Yes" : "No"}
-                  </p>
-                </div>
-                <div className="text-center">
-                  <div
-                    className="w-20 h-20 rounded-full mx-auto mb-3 flex items-center justify-center"
-                    style={{
-                      background: pet.compatibility.apartment
-                        ? "var(--color-success)"
-                        : "var(--color-error)",
-                      opacity: 0.15,
-                    }}
-                  >
-                    <Home
-                      className="w-10 h-10"
-                      style={{
-                        color: pet.compatibility.apartment
-                          ? "var(--color-success)"
-                          : "var(--color-error)",
-                      }}
-                    />
-                  </div>
-                  <p
-                    className="font-semibold mb-1"
-                    style={{
-                      color: "var(--color-text)",
-                    }}
-                  >
-                    Apartment Friendly
-                  </p>
-                  <p
-                    className="text-sm font-medium"
-                    style={{
-                      color: pet.compatibility.apartment
-                        ? "var(--color-success)"
-                        : "var(--color-error)",
-                    }}
-                  >
-                    {pet.compatibility.apartment ? "Yes" : "No"}
-                  </p>
+
+
+              {/* Requirements Grid (Replaces old circles) */}
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                  <ShieldCheck className="w-6 h-6 text-gray-400" /> Environment & Needs
+                </h3>
+                
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {[
+                    { label: "Good w/ Kids", val: pet.compatibility?.kids },
+                    { label: "Good w/ Pets", val: pet.compatibility?.pets },
+                    { label: "Apartment Friendly", val: pet.compatibility?.apartment },
+                    { label: "Home Type Needed", val: pet.environment?.idealEnvironment || "Any" },
+                    { label: "Min Space", val: pet.environment?.minSpaceSqm ? `${pet.environment.minSpaceSqm} sqm` : "N/A" },
+                    { label: "Est. Monthly Cost", val: pet.financial?.estimatedMonthlyCost ? `£${pet.financial.estimatedMonthlyCost}` : "N/A" },
+                    { label: "Energy Level", val: pet.behaviour?.energyScore ? `${pet.behaviour.energyScore}/5` : "N/A" },
+                    { label: "Independence", val: pet.behaviour?.independenceTolerance || "N/A" },
+                  ].map((req, idx) => (
+                    <div key={idx} className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                      <p className="text-xs text-gray-400 font-semibold mb-1 uppercase tracking-wide">{req.label}</p>
+                      {typeof req.val === "boolean" ? (
+                        <span className={`text-sm font-bold flex items-center gap-1.5 ${req.val ? "text-green-600" : "text-red-500"}`}>
+                          {req.val ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                          {req.val ? "Yes" : "No"}
+                        </span>
+                      ) : (
+                        <span className="text-sm font-bold text-gray-800 capitalize">
+                          {String(req.val).replace(/-/g, " ")}
+                        </span>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             </motion.div>
@@ -915,16 +819,24 @@ export function PetDetailPage() {
                 variant="primary"
                 fullWidth
                 size="lg"
-                icon={<Heart className="w-5 h-5" />}
-                disabled={pet.adoptionStatus !== "available"}
+                icon={user?.status === 'suspended' ? <AlertTriangle className="w-5 h-5" /> : <Heart className="w-5 h-5" />}
+                disabled={pet.adoptionStatus !== "available" || user?.status === "suspended"}
                 onClick={handleAdoptClick}
               >
-                {hasApplied
+                {user?.status === "suspended"
+                  ? "Account Suspended"
+                  : hasApplied
                   ? "Track Application"
                   : pet.adoptionStatus === "available"
                   ? "Adopt Me"
                   : "Not Available"}
               </Button>
+
+              {user?.status === "suspended" && (
+                <p className="mt-2 text-xs text-center text-red-500 font-medium">
+                  Your account is suspended. Actions are restricted.
+                </p>
+              )}
 
               {/* Shelter Contact */}
               <div

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Palette } from "lucide-react";
 import { themes } from "../../themes/themeConfig";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -80,9 +80,7 @@ export function ThemeSwitcher() {
                         className="w-6 h-6 rounded-lg"
                         style={{
                           background:
-                            theme.name === "lavender"
-                              ? "#B19CD9"
-                              : theme.name === "friendly"
+                            theme.name === "friendly"
                               ? "#D4745C"
                               : theme.name === "bold"
                               ? "#6C5CE7"
@@ -93,9 +91,7 @@ export function ThemeSwitcher() {
                         className="w-6 h-6 rounded-lg"
                         style={{
                           background:
-                            theme.name === "lavender"
-                              ? "#E6E6FA"
-                              : theme.name === "friendly"
+                            theme.name === "friendly"
                               ? "#7C9885"
                               : theme.name === "bold"
                               ? "#FF6B9D"
