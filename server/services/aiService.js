@@ -1,6 +1,6 @@
-import OpenAI from "openai";
+import Groq from "groq-sdk";
 
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SYSTEM PROMPTS (exact text from spec)
@@ -119,7 +119,7 @@ Max continuous alone time: ${lifestyle.maxContinuousAloneTime != null ? `${lifes
 }
 
 /**
- * Parse JSON from OpenAI response content. Handles markdown code blocks.
+ * Parse JSON from Groq response content. Handles markdown code blocks.
  */
 function parseJsonResponse(content) {
   // Strip markdown code blocks if present
@@ -130,6 +130,8 @@ function parseJsonResponse(content) {
     .trim();
   return JSON.parse(cleaned);
 }
+
+const INSIGHTS_MODEL = "llama-3.3-70b-versatile";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EXPORTS
@@ -143,13 +145,14 @@ export async function generateShelterInsights(compatibilityData, pet, profile) {
   const userMessage = buildShelterUserMessage(compatibilityData, pet, profile);
 
   const response = await client.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: INSIGHTS_MODEL,
     messages: [
       { role: "system", content: SHELTER_SYSTEM_PROMPT },
       { role: "user", content: userMessage },
     ],
     temperature: 0.4,
     max_tokens: 600,
+    response_format: { type: "json_object" }
   });
 
   const content = response.choices[0]?.message?.content ?? "";
@@ -175,13 +178,14 @@ export async function generateAdopterInsights(compatibilityData, pet, profile) {
   const userMessage = buildAdopterUserMessage(compatibilityData, pet, profile);
 
   const response = await client.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: INSIGHTS_MODEL,
     messages: [
       { role: "system", content: ADOPTER_SYSTEM_PROMPT },
       { role: "user", content: userMessage },
     ],
     temperature: 0.5,
     max_tokens: 300,
+    response_format: { type: "json_object" }
   });
 
   const content = response.choices[0]?.message?.content ?? "";
