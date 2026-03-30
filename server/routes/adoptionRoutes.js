@@ -78,4 +78,27 @@ router.put("/:id/status", verifyToken, requireShelter, updateApplicationStatus);
 // Update document verification status
 router.put("/:id/documents/status", verifyToken, requireShelter, updateDocumentStatus);
 
+// ============ FINALIZATION PIPELINE ROUTES ============
+import * as finalizationController from "../controllers/adoptionFinalizationController.js";
+
+// Adopter + Shelter Shared
+router.get("/:id/finalize/status", verifyToken, finalizationController.getFinalizationStatus);
+
+// Shelter Actions
+router.post("/:id/finalize/initialize", verifyToken, requireShelter, finalizationController.initializeFinalization);
+router.post("/:id/finalize/confirm-fee", verifyToken, requireShelter, finalizationController.confirmFee);
+router.post("/:id/finalize/confirm-ready", verifyToken, requireShelter, finalizationController.confirmReadyForPickup);
+router.post("/:id/finalize/confirm-handover", verifyToken, requireShelter, finalizationController.confirmHandover);
+router.post("/:id/finalize/revert", verifyToken, requireShelter, finalizationController.revertToMeetingComplete);
+
+// Adopter Actions
+router.post("/:id/finalize/initiate-payment", verifyToken, requireAdopter, finalizationController.initiateAdoptionPayment);
+router.post("/:id/finalize/sign-contract", verifyToken, requireAdopter, finalizationController.submitSignature);
+
+// System Actions (eSewa callbacks — these routes might be hit by user redirect, so token might not be in headers)
+// Usually eSewa redirect is a GET request with query params
+router.get("/:id/finalize/verify-payment", finalizationController.verifyAdoptionPayment);
+router.post("/:id/finalize/payment-failure", finalizationController.handlePaymentFailure);
+router.get("/:id/finalize/payment-failure", finalizationController.handlePaymentFailure);
+
 export default router;
