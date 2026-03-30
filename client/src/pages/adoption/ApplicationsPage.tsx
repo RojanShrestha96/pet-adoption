@@ -16,6 +16,8 @@ import {
   FileText,
   Loader2,
   AlertCircle,
+  Brain,
+  CheckCircle2
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ShelterSidebar } from "../../components/layout/ShelterSidebar";
@@ -54,6 +56,12 @@ interface Application {
   notes?: string;
   pet?: any;
   personalInfo?: any;
+  aiInsights?: {
+    shelter?: {
+      topConcern?: string;
+      status: string;
+    }
+  };
 }
 
 interface ApplicationStats {
@@ -64,7 +72,8 @@ interface ApplicationStats {
   availability_submitted?: number;
   meeting_scheduled?: number;
   meeting_completed?: number;
-  scheduled: number;
+  scheduled?: number; // Keep scheduled as optional for now, or remove if no longer used
+  finalizing?: number; // Added finalizing
   rejected: number;
   completed: number;
 }
@@ -141,9 +150,45 @@ const statusConfig: Record<
   },
   completed: {
     variant: "success",
-    label: "Completed",
-    color: "text-teal-600",
-    bgColor: "bg-teal-50",
+    label: "Adopted",
+    color: "text-green-600",
+    bgColor: "bg-green-50",
+  },
+  finalization_pending: {
+    variant: "warning",
+    label: "Finalizing",
+    color: "text-amber-600",
+    bgColor: "bg-amber-50",
+  },
+  payment_pending: {
+    variant: "info",
+    label: "Awaiting Payment",
+    color: "text-blue-600",
+    bgColor: "bg-blue-50",
+  },
+  payment_failed: {
+    variant: "error",
+    label: "Payment Failed",
+    color: "text-red-600",
+    bgColor: "bg-red-50",
+  },
+  contract_generated: {
+    variant: "info",
+    label: "Awaiting Signature",
+    color: "text-indigo-600",
+    bgColor: "bg-indigo-50",
+  },
+  contract_signed: {
+    variant: "success",
+    label: "Contract Signed",
+    color: "text-green-600",
+    bgColor: "bg-green-50",
+  },
+  handover_pending: {
+    variant: "warning",
+    label: "Ready for Pickup",
+    color: "text-orange-600",
+    bgColor: "bg-orange-50",
   },
 };
 
@@ -198,10 +243,18 @@ export function ApplicationsPage() {
             notes: app.notes,
             pet: app.pet,
             personalInfo: app.personalInfo,
+            aiInsights: app.aiInsights,
             nextAction: app.status === 'pending' ? 'Review application' : 
-                       app.status === 'reviewing' ? 'Schedule interview' :
-                       app.status === 'scheduled' ? 'Conduct interview' :
-                       app.status === 'approved' ? 'Finalize adoption' : ''
+                       app.status === 'reviewing' ? 'Move to Approval' :
+                       app.status === 'approved' ? 'Schedule meeting' :
+                       app.status === 'availability_submitted' ? 'Schedule meeting' :
+                       app.status === 'meeting_scheduled' ? 'Complete meeting' :
+                       app.status === 'meeting_completed' ? 'Finalize adoption' :
+                       app.status === 'finalization_pending' ? 'Confirm fee' :
+                       app.status === 'payment_pending' ? 'Awaiting payment' :
+                       app.status === 'contract_generated' ? 'Awaiting signature' :
+                       app.status === 'contract_signed' ? 'Notify pickup' :
+                       app.status === 'handover_pending' ? 'Confirm handover' : ''
           })
         );
 
@@ -372,13 +425,24 @@ export function ApplicationsPage() {
               </div>
               <div className="bg-white rounded-xl p-4 border border-gray-100">
                 <div className="flex items-center gap-2 mb-1">
-                  <div className="w-2 h-2 bg-green-500 rounded-full" />
+                  <div className="w-2 h-2 bg-indigo-500 rounded-full" />
                   <span className="text-xs font-medium text-gray-500">
-                    Approved
+                    Finalizing
                   </span>
                 </div>
                 <p className="text-2xl font-bold text-gray-900">
-                  {stats.approved}
+                  {stats.finalizing || 0}
+                </p>
+              </div>
+              <div className="bg-white rounded-xl p-4 border border-gray-100">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-2 h-2 bg-green-500 rounded-full" />
+                  <span className="text-xs font-medium text-gray-500">
+                    Adopted
+                  </span>
+                </div>
+                <p className="text-2xl font-bold text-gray-900">
+                  {stats.completed}
                 </p>
               </div>
             </div>
@@ -621,6 +685,23 @@ export function ApplicationsPage() {
                                   </span>
                                 </div>
                               )}
+                              
+                              {/* AI Insight Quick View */}
+                              {app.aiInsights?.shelter?.topConcern && (
+                                <div className="mt-2 text-xs flex items-start gap-1.5 p-2 bg-amber-50 text-amber-900 rounded-lg border border-amber-200">
+                                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                                  <span className="line-clamp-2" title={app.aiInsights.shelter.topConcern}>
+                                    <span className="font-semibold text-amber-800 uppercase tracking-wider text-[10px] block mb-0.5">AI Flag</span>
+                                    {app.aiInsights.shelter.topConcern}
+                                  </span>
+                                </div>
+                              )}
+                              {!app.aiInsights?.shelter?.topConcern && app.aiInsights?.shelter?.status === 'success' && (
+                                <div className="mt-2 text-xs flex items-center gap-1.5 p-2 bg-green-50 text-green-800 rounded-lg border border-green-200">
+                                  <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+                                  <span className="font-medium">No major AI concerns</span>
+                                </div>
+                              )}
                             </div>
 
                             {/* Next Action */}
@@ -731,9 +812,21 @@ export function ApplicationsPage() {
                                   </td>
                                   <td className="py-3 px-4">
                                     <div>
-                                      <p className="font-medium text-gray-900">
-                                        {app.applicantName}
-                                      </p>
+                                      <div className="flex items-center gap-2">
+                                        <p className="font-medium text-gray-900">
+                                          {app.applicantName}
+                                        </p>
+                                        {app.aiInsights?.shelter?.topConcern && (
+                                          <div className="flex items-center justify-center p-1 bg-amber-100 text-amber-600 rounded-full" title={app.aiInsights.shelter.topConcern}>
+                                            <AlertCircle className="w-3.5 h-3.5" />
+                                          </div>
+                                        )}
+                                        {!app.aiInsights?.shelter?.topConcern && app.aiInsights?.shelter?.status === 'success' && (
+                                          <div className="flex items-center justify-center p-1 bg-green-100 text-green-600 rounded-full" title="No major AI concerns">
+                                            <CheckCircle2 className="w-3.5 h-3.5" />
+                                          </div>
+                                        )}
+                                      </div>
                                       <p className="text-xs text-gray-500">
                                         {app.applicantEmail}
                                       </p>

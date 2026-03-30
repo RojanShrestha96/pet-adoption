@@ -385,23 +385,7 @@ export function PetDetailPage() {
                     ))}
                   </div>
                 </div>
-                <div>
-                  <h4
-                    className="font-semibold mb-2"
-                    style={{
-                      color: "var(--color-text)",
-                    }}
-                  >
-                    Personality Traits
-                  </h4>
-                  <div className="flex flex-wrap gap-2">
-                    {pet.personality?.map((trait: string) => (
-                      <Badge key={trait} variant="neutral">
-                        {trait}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
+
               </div>
             </motion.div>
 
@@ -427,7 +411,7 @@ export function PetDetailPage() {
                     { label: "Apartment Friendly", val: pet.compatibility?.apartment },
                     { label: "Home Type Needed", val: pet.environment?.idealEnvironment || "Any" },
                     { label: "Min Space", val: pet.environment?.minSpaceSqm ? `${pet.environment.minSpaceSqm} sqm` : "N/A" },
-                    { label: "Est. Monthly Cost", val: pet.financial?.estimatedMonthlyCost ? `£${pet.financial.estimatedMonthlyCost}` : "N/A" },
+                    { label: "Est. Monthly Cost", val: pet.financial?.estimatedMonthlyCost ? `Rs ${pet.financial.estimatedMonthlyCost}` : "N/A" },
                     { label: "Energy Level", val: pet.behaviour?.energyScore ? `${pet.behaviour.energyScore}/5` : "N/A" },
                     { label: "Independence", val: pet.behaviour?.independenceTolerance || "N/A" },
                   ].map((req, idx) => (
@@ -527,11 +511,17 @@ export function PetDetailPage() {
                         color: "var(--color-text-light)",
                       }}
                     >
-                      {pet.temperament.includes("Energetic")
-                        ? "High - Needs regular exercise and playtime"
-                        : pet.temperament.includes("Calm")
-                        ? "Low - Enjoys relaxed activities"
-                        : "Medium - Balanced activity level"}
+                      {pet.behaviour?.energyScore === 5
+                        ? "Very High - Needs 2+ hours exercise daily"
+                        : pet.behaviour?.energyScore === 4
+                        ? "High - Needs regular active play daily"
+                        : pet.behaviour?.energyScore === 3
+                        ? "Moderate - Needs daily walks"
+                        : pet.behaviour?.energyScore === 2
+                        ? "Low - Short walks are fine"
+                        : pet.behaviour?.energyScore === 1
+                        ? "Very Low - Mostly resting"
+                        : "Energy level not specified"}
                     </p>
                   </div>
                 </div>
@@ -557,7 +547,7 @@ export function PetDetailPage() {
                         color: "var(--color-text)",
                       }}
                     >
-                      Social Behaviour
+                      Attachment Style & Independence
                     </p>
                     <p
                       className="text-sm"
@@ -565,10 +555,14 @@ export function PetDetailPage() {
                         color: "var(--color-text-light)",
                       }}
                     >
-                      {pet.temperament.includes("Social") ||
-                      pet.temperament.includes("Friendly")
-                        ? "Very social and loves meeting new people and pets"
-                        : "Prefers familiar faces and calm environments"}
+                      {pet.behaviour?.attachmentStyle === "velcro"
+                        ? "Velcro — Needs near-constant human presence and may have separation anxiety"
+                        : pet.behaviour?.attachmentStyle === "independent"
+                        ? "Independent — Content without constant contact"
+                        : pet.behaviour?.attachmentStyle === "moderate"
+                        ? "Moderate — Enjoys company but manages alone"
+                        : "Attachment style not specified."}
+                      {pet.behaviour?.separationAnxiety && pet.behaviour.separationAnxiety !== "none" ? ` (Note: Shows ${pet.behaviour.separationAnxiety} separation anxiety)` : ""}
                     </p>
                   </div>
                 </div>

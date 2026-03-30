@@ -22,7 +22,7 @@ function getBudgetMax(tier) {
     "under-5000":   5000,
     "5000-10000":   10000,
     "10000-20000":  20000,
-    "20000+":       Infinity,
+    "over-20000":   Infinity,
     // Legacy USD-era tiers — kept for backward compat with old profiles
     "under-100":    5000,
     "100-300":      10000,
@@ -42,7 +42,7 @@ function getGrade(score) {
   return { label: "Some Concerns", emoji: "🔶", color: "error" };
 }
 
-function scoreFactor({ label, score, maxScore, explanation, isFallback = false, flag = null, missingField = null }) {
+function scoreFactor({ label, score, maxScore, explanation, isFallback = false, flag = null, missingField = null, isPetDataMissing = false }) {
   return {
     label,
     score: Math.min(Math.max(Math.round(score), 0), maxScore),
@@ -53,6 +53,9 @@ function scoreFactor({ label, score, maxScore, explanation, isFallback = false, 
     flag,
     // Specific field name blocking this factor — used by UI to render locked row hint
     missingField,
+    // True only when a PET-side field is null — not the adopter's fault
+    // When true, this factor's maxScore is excluded from the scored denominator
+    isPetDataMissing,
   };
 }
 
@@ -123,9 +126,10 @@ function scoreEnergyMatch(profile, pet) {
       label: "Energy Match",
       score: 0,
       maxScore: 15,
-      explanation: `${pet.name}'s energy level hasn't been entered by the shelter. Cannot score this factor.`,
+      explanation: `${pet.name}'s energy level hasn't been entered by the shelter. This factor will be scored once the shelter completes the pet's profile.`,
       isFallback: false,
       missingField: "pet.energyLevel",
+      isPetDataMissing: true,
     });
   }
 
@@ -311,10 +315,11 @@ function scoreSpaceEnvironment(profile, pet) {
   if (isFallback) {
     return scoreFactor({
       label: "Space & Environment",
-      score: 5,
+      score: 0,
       maxScore: 10,
-      explanation: `Environmental requirements for ${pet.name} haven't been fully entered by the shelter. Scored conservatively.`,
+      explanation: `${pet.name}'s ideal environment hasn't been entered by the shelter. This factor will be scored once the shelter completes the pet's profile.`,
       isFallback: true,
+      isPetDataMissing: true,
     });
   }
 
@@ -397,14 +402,39 @@ function scoreChildrenCompat(profile, pet) {
   const legacyAgeRange = profile.household?.childrenAgeRange;
 
   // Issue 10: score=0 when we can't determine children status at all
-  if (goodWithKids === undefined || hasChildren === undefined) {
+  if (goodWithKids === undefined && hasChildren === undefined) {
+    // Both sides missing — exclude from denominator
     return scoreFactor({
       label: "Children Compatibility",
       score: 0,
       maxScore: 15,
-      explanation: `Children compatibility data from the shelter or your household information is incomplete. Complete your profile to see this score.`,
+      explanation: `${pet.name}'s children compatibility hasn't been entered by the shelter. This factor will be scored once the shelter completes the pet's profile.`,
       isFallback: false,
-      missingField: goodWithKids === undefined ? "pet.compatibility.goodWithKids" : "household.hasChildren",
+      missingField: "pet.compatibility.goodWithKids",
+      isPetDataMissing: true,
+    });
+  }
+  if (goodWithKids === undefined) {
+    // Pet side missing only — exclude from denominator
+    return scoreFactor({
+      label: "Children Compatibility",
+      score: 0,
+      maxScore: 15,
+      explanation: `${pet.name}'s children compatibility hasn't been assessed by the shelter yet. This factor will be scored once they complete the pet's profile.`,
+      isFallback: false,
+      missingField: "pet.compatibility.goodWithKids",
+      isPetDataMissing: true,
+    });
+  }
+  if (hasChildren === undefined) {
+    // Adopter side missing — counts against adopter, not pet
+    return scoreFactor({
+      label: "Children Compatibility",
+      score: 0,
+      maxScore: 15,
+      explanation: `Your household children information is incomplete. Complete your Household profile to see this score.`,
+      isFallback: false,
+      missingField: "household.hasChildren",
     });
   }
 
@@ -518,9 +548,10 @@ function scoreExistingPetCompat(profile, pet) {
       label: "Existing Pet Compatibility",
       score: 0,
       maxScore: 10,
-      explanation: `${pet.name}'s compatibility with other animals hasn't been assessed yet by the shelter. Cannot score this factor.`,
+      explanation: `${pet.name}'s compatibility with other animals hasn't been assessed by the shelter yet. This factor will be scored once they complete the pet's profile.`,
       isFallback: false,
       missingField: "pet.compatibility.goodWithPets",
+      isPetDataMissing: true,
     });
   }
 
@@ -728,7 +759,7 @@ function scoreBudgetCommitment(profile, pet) {
     "under-5000":  "under Rs 5,000",
     "5000-10000":  "Rs 5,000–10,000",
     "10000-20000": "Rs 10,000–20,000",
-    "20000+":      "Rs 20,000+",
+    "over-20000":  "over Rs 20,000",
     // Legacy labels
     "under-100": "under Rs 5,000 (legacy tier)",
     "100-300":   "Rs 5,000–10,000 (legacy tier)",
@@ -925,17 +956,36 @@ export const calculateCompatibility = (profile, pet) => {
   ];
 
   const totalScore = factors.reduce((sum, f) => sum + f.score, 0);
-  const maxScore = factors.reduce((sum, f) => sum + f.maxScore, 0); // 100
+  const maxScore = factors.reduce((sum, f) => sum + f.maxScore, 0); // always 100
 
-  const grade = getGrade(totalScore);
+  // ── Dynamic denominator ───────────────────────────────────────────────────
+  // Exclude factors that are locked because the SHELTER hasn't filled in pet data.
+  // These factors score 0 but it isn't the adopter's fault — don't count them
+  // against the adopter in the displayed percentage.
+  const scoredMax = factors.reduce(
+    (sum, f) => (f.isPetDataMissing ? sum : sum + f.maxScore),
+    0
+  );
+  // Safe: if somehow everything is missing, fall back to maxScore to avoid Infinity
+  const effectiveDenominator = scoredMax > 0 ? scoredMax : maxScore;
+  const adjustedPercentage = Math.round((totalScore / effectiveDenominator) * 100);
+
+  // Collect factors that couldn't be scored due to missing pet data
+  const unscoredFactors = factors
+    .filter(f => f.isPetDataMissing)
+    .map(f => ({ label: f.label, reason: f.explanation }));
+
+  // Grade and recommendation use adjustedPercentage so a great adopter
+  // isn't penalised for shelter data gaps.
+  const grade = getGrade(adjustedPercentage);
   const dataCompleteness = computeDataCompleteness(safeProfile, pet);
   const advisories = buildAdvisories(safeProfile, pet, factors);
   const confidenceLevel = deriveConfidenceLevel(safeProfile);
 
   const recommendation =
-    totalScore >= 75
+    adjustedPercentage >= 75
       ? `You look like a wonderful match for ${pet.name}! We encourage you to complete your application.`
-      : totalScore >= 50
+      : adjustedPercentage >= 50
       ? `You could be a great fit for ${pet.name}. Review the factor breakdown and discuss any concerns with the shelter.`
       : `There are a few compatibility areas worth exploring carefully. The shelter will help you understand if ${pet.name} is the right fit — and the meet & greet is the ideal place to work through any concerns.`;
 
@@ -953,7 +1003,10 @@ export const calculateCompatibility = (profile, pet) => {
     petId: pet._id?.toString() || pet.id,
     totalScore,
     maxScore,
-    percentage: Math.round((totalScore / maxScore) * 100),
+    scoredMax,               // denominator actually used (excludes pet-data-missing factors)
+    percentage: Math.round((totalScore / maxScore) * 100), // raw out of 100, kept for reference
+    adjustedPercentage,      // the REAL score to display — out of scoredMax
+    unscoredFactors,         // [{label, reason}] pending shelter data
     grade,
     recommendation,
     factors,

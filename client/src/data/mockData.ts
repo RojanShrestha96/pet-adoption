@@ -21,16 +21,39 @@ export interface Pet {
     apartment: boolean;
   };
   medical: {
-    vaccinated: boolean;
-    dewormed: boolean;
-    sterilized: boolean;
-    lastCheckup: string;
-    notes: string;
+    vaccinated?: boolean;
+    isVaccinated?: boolean;
+    dewormed?: boolean;
+    isDewormed?: boolean;
+    sterilized?: boolean;
+    isNeutered?: boolean;
+    microchipped?: boolean;
+    isMicrochipped?: boolean;
+    lastCheckup?: string;
+    lastVetCheckup?: string;
+    notes?: string;
+    medicalNotes?: string;
   };
   shelter: {
     name: string;
     contact: string;
     email: string;
+  };
+  behaviour?: {
+    energyScore?: number;
+    separationAnxiety?: string;
+    attachmentStyle?: string;
+    independenceTolerance?: string;
+    trainingDifficulty?: string;
+    noiseLevel?: string;
+    sheddingLevel?: string;
+  };
+  environment?: {
+    idealEnvironment?: string;
+    minSpaceSqm?: number;
+  };
+  financial?: {
+    estimatedMonthlyCost?: number;
   };
   distanceKm?: number;
 }

@@ -8,6 +8,7 @@ interface ApplicationStatusChartProps {
     approved: number;
     rejected: number;
     followUp?: number;
+    finalizing?: number;
   };
 }
 
@@ -17,12 +18,13 @@ export function ApplicationStatusChart({ data }: ApplicationStatusChartProps) {
     { name: 'Reviewing', value: data.reviewing },
     { name: 'Approved', value: data.approved },
     { name: 'Follow-up', value: data.followUp || 0 },
+    { name: 'Finalizing', value: data.finalizing || 0 },
     { name: 'Rejected', value: data.rejected },
   ].filter(item => item.value > 0);
 
-  const COLORS = ['#f59e0b', '#3b82f6', '#22c55e', '#a855f7', '#ef4444'];
+  const COLORS = ['#f59e0b', '#3b82f6', '#22c55e', '#a855f7', '#06b6d4', '#ef4444'];
 
-  const total = data.pending + data.reviewing + data.approved + data.rejected + (data.followUp || 0);
+  const total = data.pending + data.reviewing + data.approved + data.rejected + (data.followUp || 0) + (data.finalizing || 0);
 
   // Custom label to show in center
   const renderCenterLabel = () => {

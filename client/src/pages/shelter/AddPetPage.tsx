@@ -116,8 +116,8 @@ const initialFormData: FormData = {
   otherConditions: [],
   medicalDocuments: [],
   temperament: [],
-  goodWithKids: "yes",
-  goodWithPets: "yes",
+  goodWithKids: "",
+  goodWithPets: "",
   energyScore: "",
   separationAnxiety: "",
   attachmentStyle: "",
@@ -194,6 +194,14 @@ export function AddPetPage() {
     }));
   };
 
+  const step3RequiredFields = [
+    formData.energyScore,
+    formData.separationAnxiety,
+    formData.idealEnvironment,
+    formData.goodWithKids,
+    formData.goodWithPets,
+  ];
+
   const canProceed = () => {
     switch (currentStep) {
       case 1:
@@ -201,7 +209,8 @@ export function AddPetPage() {
       case 2:
         return formData.name && formData.species;
       case 3:
-        return formData.age && formData.gender;
+        // Physical fields AND all 5 compatibility-critical behavioural fields
+        return !!(formData.age && formData.gender && step3RequiredFields.every(v => v !== ""));
       case 4:
         return true; // Documentation is optional
       case 5:
@@ -210,6 +219,16 @@ export function AddPetPage() {
         return true;
     }
   };
+
+  const step3MissingFields = step3RequiredFields.length > 0
+    ? [
+        !formData.energyScore && "Energy Level",
+        !formData.separationAnxiety && "Separation Anxiety",
+        !formData.idealEnvironment && "Ideal Environment",
+        !formData.goodWithKids && "Good with Kids",
+        !formData.goodWithPets && "Good with Pets",
+      ].filter(Boolean) as string[]
+    : [];
 
   const handleNext = () => {
     if (currentStep < STEPS.length) {
@@ -704,24 +723,26 @@ export function AddPetPage() {
                       </label>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1.5">Good with Kids</label>
+                          <label className="block text-xs font-medium text-gray-500 mb-1.5">Good with Kids <span className="text-red-500">*</span></label>
                           <select
-                            className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-[var(--color-primary)] focus:outline-none transition-colors bg-white text-sm"
+                            className={`w-full px-4 py-3 rounded-xl border-2 focus:border-[var(--color-primary)] focus:outline-none transition-colors bg-white text-sm ${!formData.goodWithKids ? 'border-amber-300' : 'border-gray-200'}`}
                             value={formData.goodWithKids}
                             onChange={(e) => handleInputChange("goodWithKids", e.target.value)}
                           >
+                            <option value="">Select compatibility</option>
                             <option value="yes">Yes — great with children</option>
                             <option value="with-supervision">With supervision</option>
                             <option value="no">Not recommended with children</option>
                           </select>
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1.5">Good with Other Pets</label>
+                          <label className="block text-xs font-medium text-gray-500 mb-1.5">Good with Other Pets <span className="text-red-500">*</span></label>
                           <select
-                            className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-[var(--color-primary)] focus:outline-none transition-colors bg-white text-sm"
+                            className={`w-full px-4 py-3 rounded-xl border-2 focus:border-[var(--color-primary)] focus:outline-none transition-colors bg-white text-sm ${!formData.goodWithPets ? 'border-amber-300' : 'border-gray-200'}`}
                             value={formData.goodWithPets}
                             onChange={(e) => handleInputChange("goodWithPets", e.target.value)}
                           >
+                            <option value="">Select compatibility</option>
                             <option value="yes">Yes — all animals</option>
                             <option value="cats-only">Cats only</option>
                             <option value="dogs-only">Dogs only</option>
@@ -739,7 +760,7 @@ export function AddPetPage() {
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1.5">Energy Level (1 = very low, 5 = very high)</label>
+                          <label className="block text-xs font-medium text-gray-500 mb-1.5">Energy Level (1 = very low, 5 = very high) <span className="text-red-500">*</span></label>
                           <select
                             className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-[var(--color-primary)] focus:outline-none transition-colors bg-white text-sm"
                             value={formData.energyScore}
@@ -755,7 +776,7 @@ export function AddPetPage() {
                         </div>
 
                         <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1.5">Separation Anxiety</label>
+                          <label className="block text-xs font-medium text-gray-500 mb-1.5">Separation Anxiety <span className="text-red-500">*</span></label>
                           <select
                             className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-[var(--color-primary)] focus:outline-none transition-colors bg-white text-sm"
                             value={formData.separationAnxiety}
@@ -829,9 +850,9 @@ export function AddPetPage() {
                       {/* Environment & Financial */}
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
                         <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1.5">Ideal Environment</label>
+                          <label className="block text-xs font-medium text-gray-500 mb-1.5">Ideal Environment <span className="text-red-500">*</span></label>
                           <select
-                            className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-[var(--color-primary)] focus:outline-none transition-colors bg-white text-sm"
+                            className={`w-full px-4 py-3 rounded-xl border-2 focus:border-[var(--color-primary)] focus:outline-none transition-colors bg-white text-sm ${!formData.idealEnvironment ? 'border-amber-300' : 'border-gray-200'}`}
                             value={formData.idealEnvironment}
                             onChange={(e) => handleInputChange("idealEnvironment", e.target.value)}
                           >
@@ -856,7 +877,7 @@ export function AddPetPage() {
                         </div>
 
                         <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1.5">Est. Monthly Cost (£)</label>
+                          <label className="block text-xs font-medium text-gray-500 mb-1.5">Est. Monthly Cost (Rs)</label>
                           <input
                             type="number"
                             min="0"
@@ -867,6 +888,17 @@ export function AddPetPage() {
                           />
                         </div>
                       </div>
+
+                      {/* Validation alert — lists missing required fields */}
+                      {step3MissingFields.length > 0 && (
+                        <div className="mt-4 flex items-start gap-2 px-3 py-2.5 rounded-lg bg-amber-50 border border-amber-200">
+                          <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                          <p className="text-xs text-amber-800">
+                            <span className="font-semibold">Required for compatibility scoring:</span>{" "}
+                            {step3MissingFields.join(", ")}. These fields power the matching engine — adopters receive incomplete scores without them.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </Card>
                 </motion.div>

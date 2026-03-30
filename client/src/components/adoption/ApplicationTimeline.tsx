@@ -1,8 +1,8 @@
 
 import { motion } from 'framer-motion';
-import { Check, Clock, Calendar, Heart, XCircle } from 'lucide-react';
+import { Check, Clock, Calendar, Heart, XCircle, FileSignature } from 'lucide-react';
 
-export type ApplicationStatus = 'submitted' | 'under-review' | 'approved' | 'meet-greet' | 'follow-up' | 'follow-up-completed' | 'adopted' | 'rejected' | 'closed';
+export type ApplicationStatus = 'submitted' | 'under-review' | 'approved' | 'meet-greet' | 'follow-up' | 'follow-up-completed' | 'finalize' | 'finalized' | 'adopted' | 'rejected' | 'closed';
 
 export interface ApplicationTimelineProps {
   currentStatus: ApplicationStatus;
@@ -70,6 +70,12 @@ export function ApplicationTimeline({
         { key: 'follow-up-completed', label: 'Follow-Up Complete', icon: Check }
       );
     }
+
+    // Add Finalize step
+    baseSteps.push({ key: 'finalize', label: 'Finalization', icon: FileSignature });
+
+    // Add Finalized step (Contract Signed)
+    baseSteps.push({ key: 'finalized', label: 'Finalized', icon: Check });
 
     // Add final step
     baseSteps.push({ key: 'adopted', label: 'Adopted', icon: Heart });

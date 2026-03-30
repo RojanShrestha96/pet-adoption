@@ -227,6 +227,14 @@ export function ShelterDashboard() {
       reviewing: { variant: "info", label: "Reviewing" },
       approved: { variant: "success", label: "Approved" },
       rejected: { variant: "neutral", label: "Rejected" },
+      // Finalization Pipeline
+      finalization_pending: { variant: "info", label: "Setting Fee" },
+      payment_pending: { variant: "warning", label: "Payment Due" },
+      payment_failed: { variant: "neutral", label: "Pay Failed" },
+      contract_generated: { variant: "info", label: "Awaiting Sign" },
+      contract_signed: { variant: "success", label: "Signed" },
+      handover_pending: { variant: "warning", label: "Ready Pickup" },
+      completed: { variant: "success", label: "Adopted" },
     };
     return configs[status] || configs.pending;
   };

@@ -5,14 +5,12 @@ import {
   ArrowLeft,
   Save,
   Eye,
-  Upload,
   PawPrint,
   Heart,
   Stethoscope,
   Home,
   MapPin,
   Image,
-  FileText,
   Check,
   ChevronDown,
   ChevronUp,
@@ -94,18 +92,27 @@ export function AdminAddPetPage() {
     // Behavior
     temperament: [] as string[],
     activityLevel: "",
-    goodWithKids: false,
-    goodWithPets: false,
+    goodWithKids: "yes",
+    goodWithPets: "yes",
     goodWithCats: false,
     houseTrained: false,
     crateTrainedtrained: false,
     description: "",
+    energyScore: "",
+    separationAnxiety: "",
+    attachmentStyle: "",
+    trainingDifficulty: "",
+    noiseLevel: "",
+    sheddingLevel: "",
     // Requirements
     homeVisitRequired: true,
     fencedYardRequired: false,
     experienceRequired: false,
     specialNeeds: false,
     adoptionFee: "",
+    idealEnvironment: "",
+    minSpaceSqm: "0",
+    estimatedMonthlyCost: "",
     // Location
     shelterAssignment: "",
     location: "",
@@ -538,208 +545,255 @@ export function AdminAddPetPage() {
                   )}
 
                   {section.id === "behavior" && (
-                    <div className="space-y-5 pt-6">
-                      <div>
-                        <label
-                          className="block text-sm font-medium mb-3"
-                          style={{
-                            color: "var(--color-text)",
-                          }}
-                        >
-                          Temperament (Select all that apply)
-                        </label>
-                        <div className="flex flex-wrap gap-2">
-                          {temperamentOptions.map((trait) => (
-                            <button
-                              key={trait}
-                              onClick={() => toggleTemperament(trait)}
-                              className="px-4 py-2 rounded-xl text-sm font-medium transition-all"
-                              style={{
-                                background: formData.temperament.includes(trait)
-                                  ? "var(--color-primary)"
-                                  : "var(--color-surface)",
-                                color: formData.temperament.includes(trait)
-                                  ? "white"
-                                  : "var(--color-text)",
-                                border: "2px solid",
-                                borderColor: formData.temperament.includes(
-                                  trait
-                                )
-                                  ? "var(--color-primary)"
-                                  : "transparent",
-                              }}
+                    <>
+                      <div className="space-y-5 pt-6">
+                        <div>
+                          <label
+                            className="block text-sm font-medium mb-3 text-[var(--color-text)]"
+                          >
+                            Temperament (Select all that apply)
+                          </label>
+                          <div className="flex flex-wrap gap-2">
+                            {temperamentOptions.map((trait) => (
+                              <button
+                                key={trait}
+                                onClick={() => toggleTemperament(trait)}
+                                className="px-4 py-2 rounded-xl text-sm font-medium transition-all"
+                                style={{
+                                  background: formData.temperament.includes(trait)
+                                    ? "var(--color-primary)"
+                                    : "var(--color-surface)",
+                                  color: formData.temperament.includes(trait)
+                                    ? "white"
+                                    : "var(--color-text)",
+                                  border: "2px solid",
+                                  borderColor: formData.temperament.includes(trait)
+                                    ? "var(--color-primary)"
+                                    : "transparent",
+                                }}
+                              >
+                                {trait}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <label
+                            className="block text-sm font-medium mb-2 text-[var(--color-text)]"
+                          >
+                            Activity Level *
+                          </label>
+                          <select
+                            className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none bg-[var(--color-card)] text-[var(--color-text)]"
+                            style={{ borderColor: "var(--color-border)" }}
+                            value={formData.activityLevel}
+                            onChange={(e) => setFormData({ ...formData, activityLevel: e.target.value })}
+                          >
+                            <option value="">Select level</option>
+                            <option value="low">Low - Couch potato</option>
+                            <option value="moderate">Moderate - Daily walks</option>
+                            <option value="high">High - Very active</option>
+                          </select>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium mb-2 text-[var(--color-text)]">Good with children?</label>
+                            <select
+                              className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none bg-[var(--color-card)] text-[var(--color-text)]"
+                              style={{ borderColor: "var(--color-border)" }}
+                              value={formData.goodWithKids}
+                              onChange={(e) => setFormData({ ...formData, goodWithKids: e.target.value })}
                             >
-                              {trait}
-                            </button>
-                          ))}
+                              <option value="yes">Yes — great with children</option>
+                              <option value="with-supervision">With supervision</option>
+                              <option value="no">Not recommended with children</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-2 text-[var(--color-text)]">Good with other dogs/pets?</label>
+                            <select
+                              className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none bg-[var(--color-card)] text-[var(--color-text)]"
+                              style={{ borderColor: "var(--color-border)" }}
+                              value={formData.goodWithPets}
+                              onChange={(e) => setFormData({ ...formData, goodWithPets: e.target.value })}
+                            >
+                              <option value="yes">Yes — all animals</option>
+                              <option value="cats-only">Cats only</option>
+                              <option value="dogs-only">Dogs only</option>
+                              <option value="no">No other animals</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-3">
+                          <ToggleSwitch
+                            checked={formData.goodWithCats}
+                            onChange={(checked) => setFormData({ ...formData, goodWithCats: checked })}
+                            label="Good with cats?"
+                          />
+                          <ToggleSwitch
+                            checked={formData.houseTrained}
+                            onChange={(checked) => setFormData({ ...formData, houseTrained: checked })}
+                            label="House trained?"
+                          />
                         </div>
                       </div>
-                      <div>
-                        <label
-                          className="block text-sm font-medium mb-2"
-                          style={{
-                            color: "var(--color-text)",
-                          }}
-                        >
-                          Activity Level *
-                        </label>
-                        <select
-                          className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none"
-                          style={{
-                            borderColor: "var(--color-border)",
-                            background: "var(--color-card)",
-                            color: "var(--color-text)",
-                          }}
-                          value={formData.activityLevel}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              activityLevel: e.target.value,
-                            })
-                          }
-                        >
-                          <option value="">Select level</option>
-                          <option value="low">Low - Couch potato</option>
-                          <option value="moderate">
-                            Moderate - Daily walks
-                          </option>
-                          <option value="high">High - Very active</option>
-                        </select>
+                      <div className="pt-4 border-t mt-6" style={{ borderColor: "var(--color-border)" }}>
+                        <h4 className="font-semibold mb-3 text-[var(--color-text)]">Behavioural Assessment</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium mb-2 text-[var(--color-text)]">Energy Score (1-5)</label>
+                            <select className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none bg-[var(--color-card)] text-[var(--color-text)]" style={{ borderColor: 'var(--color-border)' }}
+                              value={formData.energyScore} onChange={e => setFormData({...formData, energyScore: e.target.value})}>
+                              <option value="">Select</option>
+                              <option value="1">1 - Very Low</option>
+                              <option value="2">2 - Low</option>
+                              <option value="3">3 - Moderate</option>
+                              <option value="4">4 - High</option>
+                              <option value="5">5 - Very High</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-2 text-[var(--color-text)]">Separation Anxiety</label>
+                            <select className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none bg-[var(--color-card)] text-[var(--color-text)]" style={{ borderColor: 'var(--color-border)' }}
+                              value={formData.separationAnxiety} onChange={e => setFormData({...formData, separationAnxiety: e.target.value})}>
+                              <option value="">Select</option>
+                              <option value="none">None</option>
+                              <option value="mild">Mild</option>
+                              <option value="moderate">Moderate</option>
+                              <option value="severe">Severe</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-2 text-[var(--color-text)]">Attachment Style</label>
+                            <select className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none bg-[var(--color-card)] text-[var(--color-text)]" style={{ borderColor: 'var(--color-border)' }}
+                              value={formData.attachmentStyle} onChange={e => setFormData({...formData, attachmentStyle: e.target.value})}>
+                              <option value="">Select</option>
+                              <option value="independent">Independent</option>
+                              <option value="moderate">Moderate</option>
+                              <option value="velcro">Velcro</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-2 text-[var(--color-text)]">Training Difficulty</label>
+                            <select className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none bg-[var(--color-card)] text-[var(--color-text)]" style={{ borderColor: 'var(--color-border)' }}
+                              value={formData.trainingDifficulty} onChange={e => setFormData({...formData, trainingDifficulty: e.target.value})}>
+                              <option value="">Select</option>
+                              <option value="easy">Easy</option>
+                              <option value="moderate">Moderate</option>
+                              <option value="challenging">Challenging</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-2 text-[var(--color-text)]">Noise Level</label>
+                            <select className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none bg-[var(--color-card)] text-[var(--color-text)]" style={{ borderColor: 'var(--color-border)' }}
+                              value={formData.noiseLevel} onChange={e => setFormData({...formData, noiseLevel: e.target.value})}>
+                              <option value="">Select</option>
+                              <option value="quiet">Quiet</option>
+                              <option value="moderate">Moderate</option>
+                              <option value="vocal">Vocal</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-2 text-[var(--color-text)]">Shedding Level</label>
+                            <select className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none bg-[var(--color-card)] text-[var(--color-text)]" style={{ borderColor: 'var(--color-border)' }}
+                              value={formData.sheddingLevel} onChange={e => setFormData({...formData, sheddingLevel: e.target.value})}>
+                              <option value="">Select</option>
+                              <option value="low">Low</option>
+                              <option value="moderate">Moderate</option>
+                              <option value="high">High</option>
+                            </select>
+                          </div>
+                        </div>
                       </div>
-                      <div className="space-y-3">
-                        <ToggleSwitch
-                          checked={formData.goodWithKids}
-                          onChange={(checked) =>
-                            setFormData({
-                              ...formData,
-                              goodWithKids: checked,
-                            })
-                          }
-                          label="Good with children?"
-                        />
-                        <ToggleSwitch
-                          checked={formData.goodWithPets}
-                          onChange={(checked) =>
-                            setFormData({
-                              ...formData,
-                              goodWithPets: checked,
-                            })
-                          }
-                          label="Good with other dogs?"
-                        />
-                        <ToggleSwitch
-                          checked={formData.goodWithCats}
-                          onChange={(checked) =>
-                            setFormData({
-                              ...formData,
-                              goodWithCats: checked,
-                            })
-                          }
-                          label="Good with cats?"
-                        />
-                        <ToggleSwitch
-                          checked={formData.houseTrained}
-                          onChange={(checked) =>
-                            setFormData({
-                              ...formData,
-                              houseTrained: checked,
-                            })
-                          }
-                          label="House trained?"
-                        />
-                      </div>
-                      <div>
+                      <div className="pt-6">
                         <label
-                          className="block text-sm font-medium mb-2"
-                          style={{
-                            color: "var(--color-text)",
-                          }}
+                          className="block text-sm font-medium mb-2 text-[var(--color-text)]"
                         >
                           Description *
                         </label>
                         <textarea
-                          className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none resize-none"
-                          style={{
-                            borderColor: "var(--color-border)",
-                            background: "var(--color-card)",
-                            color: "var(--color-text)",
-                          }}
+                          className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none resize-none bg-[var(--color-card)] text-[var(--color-text)]"
+                          style={{ borderColor: "var(--color-border)" }}
                           rows={5}
                           placeholder="Write a compelling description of this pet's personality, quirks, and what makes them special..."
                           value={formData.description}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              description: e.target.value,
-                            })
-                          }
+                          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                         />
                       </div>
-                    </div>
+                    </>
                   )}
 
                   {section.id === "requirements" && (
-                    <div className="space-y-5 pt-6">
-                      <div className="space-y-3">
-                        <ToggleSwitch
-                          checked={formData.homeVisitRequired}
-                          onChange={(checked) =>
-                            setFormData({
-                              ...formData,
-                              homeVisitRequired: checked,
-                            })
-                          }
-                          label="Home visit required?"
-                          description="Shelter will conduct a home inspection before adoption"
-                        />
-                        <ToggleSwitch
-                          checked={formData.fencedYardRequired}
-                          onChange={(checked) =>
-                            setFormData({
-                              ...formData,
-                              fencedYardRequired: checked,
-                            })
-                          }
-                          label="Fenced yard required?"
-                          description="Adopter must have a securely fenced outdoor area"
-                        />
-                        <ToggleSwitch
-                          checked={formData.experienceRequired}
-                          onChange={(checked) =>
-                            setFormData({
-                              ...formData,
-                              experienceRequired: checked,
-                            })
-                          }
-                          label="Experience required?"
-                          description="Adopter should have prior pet ownership experience"
-                        />
-                        <ToggleSwitch
-                          checked={formData.specialNeeds}
-                          onChange={(checked) =>
-                            setFormData({
-                              ...formData,
-                              specialNeeds: checked,
-                            })
-                          }
-                          label="Special needs pet?"
-                          description="This pet requires extra care or accommodations"
-                        />
+                    <>
+                      <div className="space-y-5 pt-6">
+                        <div className="space-y-3">
+                          <ToggleSwitch
+                            checked={formData.homeVisitRequired}
+                            onChange={(checked) => setFormData({ ...formData, homeVisitRequired: checked })}
+                            label="Home visit required?"
+                            description="Shelter will conduct a home inspection before adoption"
+                          />
+                          <ToggleSwitch
+                            checked={formData.fencedYardRequired}
+                            onChange={(checked) => setFormData({ ...formData, fencedYardRequired: checked })}
+                            label="Fenced yard required?"
+                            description="Adopter must have a securely fenced outdoor area"
+                          />
+                          <ToggleSwitch
+                            checked={formData.experienceRequired}
+                            onChange={(checked) => setFormData({ ...formData, experienceRequired: checked })}
+                            label="Experience required?"
+                            description="Adopter should have prior pet ownership experience"
+                          />
+                          <ToggleSwitch
+                            checked={formData.specialNeeds}
+                            onChange={(checked) => setFormData({ ...formData, specialNeeds: checked })}
+                            label="Special needs pet?"
+                            description="This pet requires extra care or accommodations"
+                          />
+                        </div>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium mb-2 text-[var(--color-text)]">Ideal Environment</label>
+                            <select className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none bg-[var(--color-card)] text-[var(--color-text)]" style={{ borderColor: 'var(--color-border)' }}
+                              value={formData.idealEnvironment} onChange={e => setFormData({...formData, idealEnvironment: e.target.value})}>
+                              <option value="">Select environment</option>
+                              <option value="indoor-only">Indoor only</option>
+                              <option value="indoor-with-outdoor-access">Indoor with outdoor access</option>
+                              <option value="garden-required">Garden required</option>
+                              <option value="rural-preferred">Rural / suburban preferred</option>
+                            </select>
+                          </div>
+                          <Input
+                            label="Min Space (sqm)"
+                            type="number"
+                            placeholder="e.g. 40"
+                            value={formData.minSpaceSqm}
+                            onChange={(e) => setFormData({ ...formData, minSpaceSqm: e.target.value })}
+                            fullWidth
+                          />
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <Input
+                            label="Adoption Fee (NPR)"
+                            type="number"
+                            placeholder="Enter adoption fee"
+                            value={formData.adoptionFee}
+                            onChange={(e) => setFormData({ ...formData, adoptionFee: e.target.value })}
+                            fullWidth
+                          />
+                          <Input
+                            label="Estimated Monthly Cost (Rs)"
+                            type="number"
+                            placeholder="e.g. 2000"
+                            value={formData.estimatedMonthlyCost}
+                            onChange={(e) => setFormData({ ...formData, estimatedMonthlyCost: e.target.value })}
+                            fullWidth
+                          />
+                        </div>
                       </div>
-                      <Input
-                        label="Adoption Fee (NPR)"
-                        type="number"
-                        placeholder="Enter adoption fee"
-                        value={formData.adoptionFee}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            adoptionFee: e.target.value,
-                          })
-                        }
-                        fullWidth
-                      />
-                    </div>
+                    </>
                   )}
 
                   {section.id === "media" && (

@@ -17,6 +17,7 @@ import {
   Trash2,
   AlertCircle,
   CheckCircle,
+  Banknote,
 } from "lucide-react";
 import { ShelterSidebar } from "../../components/layout/ShelterSidebar";
 import { Card } from "../../components/ui/Card";
@@ -30,13 +31,15 @@ import { ThemeSwitcher } from "../../components/common/ThemeSwitcher";
 import { ToggleSwitch } from "../../components/ui/ToggleSwitch";
 import { Badge } from "../../components/ui/Badge";
 import { LocationPicker } from "../../components/forms/LocationPicker";
+import { AdoptionFeeSettings } from "../../components/adoption/AdoptionFeeSettings";
 
 type Tab =
   | "profile"
   | "security"
   | "preferences"
   | "location"
-  | "documentation";
+  | "documentation"
+  | "fees";
 
 export function SettingsPage() {
   const { showToast } = useToast();
@@ -442,6 +445,7 @@ export function SettingsPage() {
     { id: "preferences", label: "Preferences", icon: Bell },
     { id: "location", label: "Location", icon: MapPin },
     { id: "documentation", label: "Documents", icon: FileText },
+    { id: "fees", label: "Adoption Fees", icon: Banknote },
   ];
 
   if (isLoading) {
@@ -1139,6 +1143,9 @@ export function SettingsPage() {
                     </div>
                   </Card>
                 )}
+
+                {/* FEES TAB */}
+                {activeTab === "fees" && <AdoptionFeeSettings />}
               </motion.div>
             </div>
           </div>

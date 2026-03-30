@@ -19,7 +19,8 @@ import {
   ChevronDown,
   X,
   AlertCircle,
-  Clock // Added Clock icon for pending status
+  Clock, // Added Clock icon for pending status
+  AlertTriangle,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ShelterSidebar } from "../../components/layout/ShelterSidebar";
@@ -51,10 +52,37 @@ interface Pet {
         isDewormed: boolean;
         healthStatus?: string;
     };
+    // Compatibility scoring fields
+    behaviour?: {
+        energyScore?: number;
+        separationAnxiety?: string;
+        trainingDifficulty?: string;
+        noiseLevel?: string;
+        sheddingLevel?: string;
+    };
+    environment?: {
+        idealEnvironment?: string;
+    };
+    compatibility?: {
+        goodWithKids?: string;
+        goodWithPets?: string;
+    };
     views?: number;
-    likes?: number; // Assuming backend might have this or defaults to 0
+    likes?: number;
     createdAt: string;
 }
+
+/** Returns labels of missing compatibility fields that affect scoring. */
+function getMissingCompatibilityFields(pet: Pet): string[] {
+    const missing: string[] = [];
+    if (!pet.behaviour?.energyScore) missing.push("Energy Level");
+    if (!pet.behaviour?.separationAnxiety) missing.push("Separation Anxiety");
+    if (!pet.environment?.idealEnvironment) missing.push("Ideal Environment");
+    if (!pet.compatibility?.goodWithKids) missing.push("Good with Kids");
+    if (!pet.compatibility?.goodWithPets) missing.push("Good with Pets");
+    return missing;
+}
+
 
 type ViewMode = "grid" | "list";
 type SpeciesFilter = "all" | "dog" | "cat" | "other";
@@ -541,7 +569,19 @@ export function PetsManagementPage() {
                                 </Badge>
                              )}
                           </div>
-                          {/* Quick Actions Overlay */}
+                          {/* Compatibility warning badge */}
+                          {pet.reviewStatus === 'approved' && getMissingCompatibilityFields(pet).length > 0 && (
+                            <div className="absolute top-3 right-3">
+                              <span
+                                title={`Missing: ${getMissingCompatibilityFields(pet).join(", ")}. Adopters see incomplete compatibility scores.`}
+                                className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300 shadow-sm"
+                              >
+                                <AlertTriangle className="w-2.5 h-2.5" />
+                                Incomplete profile
+                              </span>
+                            </div>
+                          )}
+
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                             <motion.button
                               whileHover={{ scale: 1.1 }}

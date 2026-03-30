@@ -4,12 +4,14 @@ import {
   ArrowLeft, CheckCircle, XCircle, FileText, User, Home, Phone, Mail,
   Clock, Dog, Cat, MapPin, Heart, CalendarCheck, ChevronDown, Eye,
   Loader2, AlertCircle, AlertTriangle, Activity, Shield, ExternalLink,
-  Zap, TrendingUp, PawPrint, Info, RefreshCw, Sparkles,
+  Zap, TrendingUp, PawPrint, Info, RefreshCw, Sparkles, MessageSquare, Edit2
 } from "lucide-react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { ShelterSidebar } from "../../components/layout/ShelterSidebar";
 import { HamburgerMenu } from "../../components/layout/HamburgerMenu";
+import { ShelterFinalizationPanel } from "../../components/adoption/ShelterFinalizationPanel";
 import { NotificationCenter } from "../../components/common/NotificationCenter";
+import { EditPetModal } from "../../components/EditPetModal";
 import api from "../../utils/api";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
@@ -27,6 +29,7 @@ const buildWorkflowSteps = (app: any) => {
     { key: "availability_submitted", label: "Availability Sent", icon: Clock, desc: "Applicant submitted availability." },
     { key: "meeting_scheduled", label: "Meeting Scheduled", icon: CalendarCheck, desc: "Meet & Greet scheduled." },
     { key: "meeting_completed", label: "Meeting Complete", icon: CheckCircle, desc: "Meeting done." },
+    { key: "finalize", label: "Finalize", icon: Zap, desc: "Adoption finalization in progress." },
     { key: "completed", label: "Adopted", icon: Heart, desc: "Adoption finalized!" },
   ];
   if (app.status === "rejected") return [
@@ -51,6 +54,10 @@ const buildWorkflowSteps = (app: any) => {
       { key: "follow_up_completed", label: "Follow-Up Complete", icon: CheckCircle, desc: "" },
     );
   }
+  
+  // Add Finalization stage
+  steps.push({ key: "finalize", label: "Finalize", icon: Zap, desc: "Payment & Contract" });
+  
   steps.push({ key: "completed", label: "Adopted", icon: Heart, desc: "Done!" });
   return steps;
 };
@@ -63,6 +70,18 @@ const getDisplayStatus = (app: any) => {
     if (app.status === "meeting_scheduled") return "follow_up_scheduled";
     if (app.status === "meeting_completed") return "follow_up_completed";
   }
+
+  // Finalization mapping
+  const finalizeStatuses = [
+    "finalization_pending",
+    "payment_pending",
+    "payment_failed",
+    "contract_generated",
+    "contract_signed",
+    "handover_pending"
+  ];
+  if (finalizeStatuses.includes(app.status)) return "finalize";
+
   return app.status;
 };
 
@@ -171,6 +190,7 @@ export function ApplicationDetailPage() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ aiInsights: true, petDetails: false, applicant: true, documents: true, activity: false, profileDelta: false });
   const [regenerating, setRegenerating] = useState(false);
   const [currentProfile, setCurrentProfile] = useState<any>(null);
+  const [isEditPetModalOpen, setIsEditPetModalOpen] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{ open: boolean; title: string; message: string; confirmLabel: string; danger: boolean; action: () => void }>({ open: false, title: "", message: "", confirmLabel: "Confirm", danger: false, action: () => {} });
 
   const confirm = (title: string, message: string, action: () => void, opts?: { confirmLabel?: string; danger?: boolean }) =>
@@ -178,32 +198,33 @@ export function ApplicationDetailPage() {
 
   const toggle = (k: string) => setExpanded(p => ({ ...p, [k]: !p[k] }));
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        setLoading(true);
-        const { data } = await api.get(`/applications/${applicationId}`);
-        const docs = [
-          ...(data.personalInfo?.idDocuments || []).map((url: string, i: number) => ({ id: `id-${i}`, name: `ID Document ${i + 1}`, url, status: data.documentStatus?.find((s: any) => s.url === url)?.status || "pending", uploadedAt: data.createdAt })),
-          ...(data.household?.proofOfResidence || []).map((url: string, i: number) => ({ id: `res-${i}`, name: `Proof of Residence ${i + 1}`, url, status: data.documentStatus?.find((s: any) => s.url === url)?.status || "pending", uploadedAt: data.createdAt })),
-          ...(data.household?.landlordPermission || []).map((url: string, i: number) => ({ id: `land-${i}`, name: `Landlord Permission ${i + 1}`, url, status: data.documentStatus?.find((s: any) => s.url === url)?.status || "pending", uploadedAt: data.createdAt })),
-        ];
-        setApplication({ ...data, documents: docs });
+  const loadApplication = async () => {
+    try {
+      setLoading(true);
+      const { data } = await api.get(`/applications/${applicationId}`);
+      const docs = [
+        ...(data.personalInfo?.idDocuments || []).map((url: string, i: number) => ({ id: `id-${i}`, name: `ID Document ${i + 1}`, url, status: data.documentStatus?.find((s: any) => s.url === url)?.status || "pending", uploadedAt: data.createdAt })),
+        ...(data.household?.proofOfResidence || []).map((url: string, i: number) => ({ id: `res-${i}`, name: `Proof of Residence ${i + 1}`, url, status: data.documentStatus?.find((s: any) => s.url === url)?.status || "pending", uploadedAt: data.createdAt })),
+        ...(data.household?.landlordPermission || []).map((url: string, i: number) => ({ id: `land-${i}`, name: `Landlord Permission ${i + 1}`, url, status: data.documentStatus?.find((s: any) => s.url === url)?.status || "pending", uploadedAt: data.createdAt })),
+      ];
+      setApplication({ ...data, documents: docs });
 
-        // Fetch current profile for delta comparison
-        if (data.adopter?._id) {
-          try {
-            const profRes = await api.get(`/profiles/${data.adopter._id}`);
-            setCurrentProfile(profRes.data);
-          } catch (e) {
-            console.log("Could not fetch current profile for delta", e);
-          }
+      // Fetch current profile for delta comparison
+      if (data.adopter?._id) {
+        try {
+          const profRes = await api.get(`/profiles/${data.adopter._id}`);
+          setCurrentProfile(profRes.data);
+        } catch (e) {
+          console.log("Could not fetch current profile for delta", e);
         }
+      }
 
-      } catch (err: any) { setError(err.response?.data?.message || "Failed to load"); }
-      finally { setLoading(false); }
-    };
-    if (applicationId) load();
+    } catch (err: any) { setError(err.response?.data?.message || "Failed to load"); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => {
+    if (applicationId) loadApplication();
   }, [applicationId]);
 
   const handleRegenerateAI = async () => {
@@ -237,6 +258,19 @@ export function ApplicationDetailPage() {
       setSelectedDoc(null);
       showToast(status === "verified" ? "Document verified" : "Document rejected", status === "verified" ? "success" : "error");
     } catch { showToast("Failed to update document", "error"); }
+  };
+
+  const handlePetSave = async (updatedPet: any) => {
+    try {
+      setLoading(true);
+      await api.put(`/pets/${application.pet._id}`, updatedPet);
+      showToast("Pet details updated successfully", "success");
+      loadApplication(); // Reload to reflect changes
+    } catch (err: any) {
+      showToast(err.response?.data?.message || "Failed to update pet", "error");
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (loading) return (
@@ -436,6 +470,13 @@ export function ApplicationDetailPage() {
             <div className="grid lg:grid-cols-3 gap-4">
               {/* Left column (B + C) */}
               <div className="lg:col-span-2 space-y-4">
+              
+                {/* ═══ SECTION: FINALIZATION PANEL ═══ */}
+                <ShelterFinalizationPanel 
+                  applicationId={application._id} 
+                  application={application} 
+                  onRefresh={loadApplication} 
+                />
 
                 {/* ═══ SECTION B: RISK & COMPATIBILITY INTELLIGENCE ═══ */}
                 {settings.compatibilityIntelligenceEnabled && (
@@ -585,16 +626,29 @@ export function ApplicationDetailPage() {
                             </p>
                           </div>
 
-                          {/* Suggested Questions */}
-                          <div className="pt-3 border-t border-indigo-50">
-                            <p className="text-[11px] text-indigo-900 uppercase font-bold tracking-wide mb-2 flex items-center gap-1.5">
-                              <User className="w-3 h-3" /> Suggested Meet & Greet Questions
-                            </p>
-                            <ul className="space-y-2">
+                          {/* Suggested Interview Prompts */}
+                          <div className="pt-4 mt-2 border-t border-indigo-100">
+                            <div className="flex items-center gap-2 mb-3">
+                              <div className="p-1.5 bg-indigo-100 text-indigo-600 rounded-lg">
+                                <MessageSquare className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <h3 className="text-sm font-bold text-indigo-900">Suggested Interview Prompts</h3>
+                                <p className="text-[10px] text-indigo-600/80 uppercase tracking-widest font-semibold">For the Meet & Greet</p>
+                              </div>
+                            </div>
+                            
+                            <div className="p-3 mb-4 bg-white/50 border border-indigo-100/50 rounded-lg text-xs text-indigo-800 font-medium">
+                              💡 We recommend asking these specific questions during the interview to address the AI's top compatibility concerns.
+                            </div>
+
+                            <ul className="space-y-2.5">
                               {aiInsights.questions?.map((q: string, i: number) => (
-                                <li key={i} className="text-sm text-gray-700 flex items-start gap-2 bg-white rounded-lg p-2.5 border border-indigo-50 shadow-sm">
-                                  <span className="text-indigo-400 font-bold shrink-0 mt-0.5">{i+1}.</span>
-                                  {q}
+                                <li key={i} className="group flex items-start gap-3 bg-white rounded-xl p-3 border border-indigo-100 shadow-sm hover:border-indigo-300 transition-colors">
+                                  <div className="w-6 h-6 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                    {i+1}
+                                  </div>
+                                  <span className="text-sm text-gray-700 font-medium leading-relaxed">{q}</span>
                                 </li>
                               ))}
                             </ul>
@@ -613,7 +667,26 @@ export function ApplicationDetailPage() {
                 {/* ═══ SECTION C: STRUCTURED REVIEW DATA ═══ */}
 
                 {/* Pet Requirements & Traits */}
-                <SectionCollapsible icon={PawPrint} iconBg="bg-amber-50 text-amber-600" title="Pet Requirements & Traits" expanded={expanded.petDetails} onToggle={() => toggle("petDetails")}>
+                <SectionCollapsible 
+                  icon={PawPrint} 
+                  iconBg="bg-amber-50 text-amber-600" 
+                  title="Pet Requirements & Traits" 
+                  expanded={expanded.petDetails} 
+                  onToggle={() => toggle("petDetails")}
+                >
+                  <div className="flex justify-end -mt-8 mb-2">
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        icon={<Edit2 className="w-3.5 h-3.5" />}
+                        className="text-amber-600 hover:bg-amber-50"
+                        onClick={() => setIsEditPetModalOpen(true)}
+                      >
+                        Edit Pet
+                      </Button>
+                    </div>
+                  </div>
                   <div className="space-y-4 pt-1">
                     
                     {/* Medical details */}
@@ -623,8 +696,10 @@ export function ApplicationDetailPage() {
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                           {[
                             { l: "Health Status", v: application.pet.medical.healthStatus || "N/A" },
-                            { l: "Spayed/Neutered", v: application.pet.medical.spayedNeutered === true ? "Yes" : application.pet.medical.spayedNeutered === false ? "No" : "N/A" },
-                            { l: "Vaccinations", v: application.pet.medical.vaccinationStatus || "N/A" },
+                            { l: "Sterilized", v: application.pet.medical.isNeutered ? "Yes" : "No" },
+                            { l: "Vaccinated", v: application.pet.medical.isVaccinated ? "Yes" : "No" },
+                            { l: "Microchipped", v: application.pet.medical.isMicrochipped ? "Yes" : "No" },
+                            { l: "Dewormed", v: application.pet.medical.isDewormed ? "Yes" : "No" },
                             { l: "Special Needs", v: application.pet.medical.isSpecialNeeds ? "Yes" : application.pet.medical.healthStatus === "special-needs" ? "Yes" : "No" },
                           ].map(({ l, v }) => (
                             <div key={l} className="bg-gray-50 rounded-lg p-2.5">
@@ -886,6 +961,19 @@ export function ApplicationDetailPage() {
 
       {/* Confirm Modal */}
       <ConfirmModal isOpen={confirmModal.open} onClose={() => setConfirmModal(p => ({ ...p, open: false }))} onConfirm={confirmModal.action} title={confirmModal.title} message={confirmModal.message} confirmLabel={confirmModal.confirmLabel} danger={confirmModal.danger} />
+
+      {/* Edit Pet Modal */}
+      {application?.pet && (
+        <EditPetModal 
+          pet={{
+            ...application.pet,
+            id: application.pet._id
+          }}
+          isOpen={isEditPetModalOpen}
+          onClose={() => setIsEditPetModalOpen(false)}
+          onSave={handlePetSave}
+        />
+      )}
     </div>
   );
 }

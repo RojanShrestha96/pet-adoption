@@ -9,9 +9,65 @@ import { geocodeAddress } from "../services/geoService.js";
 // GET ALL SHELTERS (Public - Limited for Homepage)
 export const getAllShelters = async (req, res) => {
   try {
-    const shelters = await Shelter.find()
-      .select("-password -documentation -preferences")
-      .limit(4);
+    const { lat, lng } = req.query;
+    let shelters = [];
+
+    if (lat && lng) {
+      const parsedLat = parseFloat(lat);
+      const parsedLng = parseFloat(lng);
+
+      if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
+        // Step 1: Try finding verified shelters within 50km
+        shelters = await Shelter.aggregate([
+          {
+            $geoNear: {
+              near: { type: "Point", coordinates: [parsedLng, parsedLat] },
+              distanceField: "distance",
+              maxDistance: 50000, 
+              spherical: true,
+              query: { isSuspended: false, isVerified: true }
+            }
+          },
+          {
+            $project: { password: 0, documentation: 0, preferences: 0 }
+          },
+          { $limit: 4 }
+        ]);
+
+        // Step 2: If no verified shelters nearby, try finding ANY shelters nearby (up to 500km)
+        if (shelters.length === 0) {
+          shelters = await Shelter.aggregate([
+            {
+              $geoNear: {
+                near: { type: "Point", coordinates: [parsedLng, parsedLat] },
+                distanceField: "distance",
+                maxDistance: 500000,
+                spherical: true,
+                query: { isSuspended: false }
+              }
+            },
+            {
+              $project: { password: 0, documentation: 0, preferences: 0 }
+            },
+            { $limit: 4 }
+          ]);
+        }
+
+        // Format distance for UI
+        shelters = shelters.map(s => ({
+          ...s,
+          distance: s.distance ? (s.distance / 1000).toFixed(1) + " km" : "Location varies"
+        }));
+      }
+    }
+
+    // Step 3: Global fallback if still no shelters found (or no location provided)
+    if (shelters.length === 0) {
+      shelters = await Shelter.find({ isSuspended: false })
+        .select("-password -documentation -preferences")
+        .limit(4);
+    }
+    
     res.json(shelters);
   } catch (error) {
     console.error("Error fetching shelters:", error);
@@ -224,7 +280,15 @@ export const getShelterAnalytics = async (req, res) => {
       reviewing: applications.filter(a => a.status === 'reviewing').length,
       approved: applications.filter(a => a.status === 'approved').length,
       rejected: applications.filter(a => a.status === 'rejected').length,
-      followUp: applications.filter(a => ['follow_up_required', 'follow_up_scheduled'].includes(a.status)).length
+      followUp: applications.filter(a => ['follow_up_required', 'follow_up_scheduled'].includes(a.status)).length,
+      finalizing: applications.filter(a => [
+        'finalization_pending', 
+        'payment_pending', 
+        'payment_failed', 
+        'contract_generated', 
+        'contract_signed', 
+        'handover_pending'
+      ].includes(a.status)).length
     };
 
     // 5. Recent Activity Timeline (last 7 days)
@@ -249,14 +313,34 @@ export const getShelterAnalytics = async (req, res) => {
 
     // 6. Adoption Funnel Stages
     const totalApplications = applications.length;
-    const approvedApps = applications.filter(a => ['approved', 'follow_up_required', 'follow_up_scheduled', 'follow_up_completed', 'finalized'].includes(a.status)).length;
-    const meetAndGreetApps = applications.filter(a => ['follow_up_scheduled', 'follow_up_completed', 'finalized'].includes(a.status)).length;
-    const finalizedApps = applications.filter(a => a.status === 'finalized').length;
+    const finalizationStatuses = [
+      'finalization_pending', 
+      'payment_pending', 
+      'payment_failed', 
+      'contract_generated', 
+      'contract_signed', 
+      'handover_pending'
+    ];
+    
+    const approvedApps = applications.filter(a => 
+      ['approved', 'follow_up_required', 'follow_up_scheduled', 'follow_up_completed', 'completed', ...finalizationStatuses].includes(a.status)
+    ).length;
+    
+    const meetAndGreetApps = applications.filter(a => 
+      ['meeting_scheduled', 'meeting_completed', 'follow_up_scheduled', 'follow_up_completed', 'completed', ...finalizationStatuses].includes(a.status)
+    ).length;
+    
+    const finalizedApps = applications.filter(a => a.status === 'completed').length;
+    
+    const finalizationApps = applications.filter(a => 
+      [...finalizationStatuses, 'completed'].includes(a.status)
+    ).length;
 
     const adoptionFunnel = [
       { stage: 'Applications', value: totalApplications, color: '#3b82f6' },
       { stage: 'Approved', value: approvedApps, color: '#8b5cf6' },
       { stage: 'Meet & Greet', value: meetAndGreetApps, color: '#f59e0b' },
+      { stage: 'Finalizing', value: finalizationApps, color: '#06b6d4' },
       { stage: 'Adopted', value: finalizedApps, color: '#22c55e' }
     ];
 
@@ -289,8 +373,8 @@ export const getShelterAnalytics = async (req, res) => {
 
     // 8. Average Time to Adoption (days)
     const adoptionTimes = applications
-      .filter(a => a.status === 'finalized' && a.createdAt && a.updatedAt)
-      .map(a => (new Date(a.updatedAt) - new Date(a.createdAt)) / (1000 * 60 * 60 * 24));
+      .filter(a => a.status === 'completed' && a.createdAt && a.completedAt)
+      .map(a => (new Date(a.completedAt) - new Date(a.createdAt)) / (1000 * 60 * 60 * 24));
     const avgTimeToAdoption = adoptionTimes.length > 0
       ? Math.round(adoptionTimes.reduce((sum, t) => sum + t, 0) / adoptionTimes.length)
       : 0;
@@ -444,5 +528,58 @@ export const getShelterDonationStats = async (req, res) => {
   } catch (error) {
     console.error("Error fetching shelter donation stats:", error);
     res.status(500).json({ message: "Server error fetching donation stats" });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FEE TABLE MANAGEMENT
+// ─────────────────────────────────────────────────────────────────────────────
+
+import AdoptionFeeTable from "../models/AdoptionFeeTable.js";
+
+// GET SHELTER FEE TABLE
+export const getFeeTable = async (req, res) => {
+  try {
+    const shelterId = req.user.userId;
+    let feeTable = await AdoptionFeeTable.findOne({ shelter: shelterId });
+
+    if (!feeTable) {
+      // Return a default empty structure if none exists yet
+      return res.json({
+        shelter: shelterId,
+        currency: "NPR",
+        defaultFee: 0,
+        speciesRates: []
+      });
+    }
+
+    res.json(feeTable);
+  } catch (error) {
+    console.error("Error fetching fee table:", error);
+    res.status(500).json({ message: "Server error fetching fee table" });
+  }
+};
+
+// UPDATE SHELTER FEE TABLE
+export const updateFeeTable = async (req, res) => {
+  try {
+    const shelterId = req.user.userId;
+    const { currency, defaultFee, speciesRates } = req.body;
+
+    // Use findOneAndUpdate with upsert: true to create or update in one go
+    const feeTable = await AdoptionFeeTable.findOneAndUpdate(
+      { shelter: shelterId },
+      { currency, defaultFee, speciesRates },
+      { new: true, upsert: true, runValidators: true }
+    );
+
+    res.json({
+      success: true,
+      message: "Fee table updated successfully",
+      feeTable
+    });
+  } catch (error) {
+    console.error("Error updating fee table:", error);
+    res.status(500).json({ message: "Server error updating fee table" });
   }
 };

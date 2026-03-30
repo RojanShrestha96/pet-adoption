@@ -655,7 +655,7 @@ export function AdoptionInfoModal({
           <option value="under-5000">Under Rs 5,000</option>
           <option value="5000-10000">Rs 5,000 – 10,000</option>
           <option value="10000-20000">Rs 10,000 – 20,000</option>
-          <option value="20000+">Rs 20,000+</option>
+          <option value="over-20000">Over Rs 20,000/month</option>
         </select>
         <p className="text-xs mt-1.5" style={{ color: "var(--color-text-light)" }}>
           Covers food, treats, toys, basic grooming, and routine veterinary care.

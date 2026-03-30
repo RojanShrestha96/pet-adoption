@@ -301,3 +301,30 @@ export const upsertAdopterProfile = async (req, res) => {
     res.status(500).json({ message: "Failed to save profile", error: error.message });
   }
 };
+
+// ── Get ANY adopter profile by ID (for Shelters & Admins) ──────────────
+export const getAdopterProfileById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Grab user's identity fields
+    const user = await User.findById(id).select("name email address phone");
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const profile = await AdopterProfile.findOne({ adopter: id });
+
+    return res.json({
+      exists: !!profile,
+      ...(profile ? profile.toObject() : {}),
+      email: user.email,
+      name: user.name,
+      userAddress: user.address ?? null,
+      userPhone: user.phone ?? null,
+    });
+  } catch (error) {
+    console.error("Error fetching adopter profile by ID:", error);
+    res.status(500).json({ message: "Failed to fetch profile", error: error.message });
+  }
+};

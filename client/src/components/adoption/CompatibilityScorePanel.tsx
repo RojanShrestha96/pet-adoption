@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronRight, Info, TrendingUp, Shield, Activity, Star, Home, Clock, Zap, Wallet, AlertTriangle, Users, Sparkles } from "lucide-react";
+import { ChevronRight, Info, TrendingUp, Shield, Activity, Star, Home, Clock, Zap, Wallet, AlertTriangle, Users, Sparkles, Lock } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface ScoreFactor {
@@ -10,6 +10,7 @@ interface ScoreFactor {
   explanation: string;
   isFallback?: boolean;
   flag?: string | null;
+  isPetDataMissing?: boolean;
 }
 
 interface Advisory {
@@ -17,11 +18,19 @@ interface Advisory {
   message: string;
 }
 
+interface UnscoredFactor {
+  label: string;
+  reason: string;
+}
+
 interface CompatibilityData {
   petId: string;
   totalScore: number;
   maxScore: number;
+  scoredMax: number;
   percentage: number;
+  adjustedPercentage: number;
+  unscoredFactors: UnscoredFactor[];
   grade: { label: string; emoji: string; color: "success" | "warning" | "error" };
   recommendation: string;
   factors: ScoreFactor[];
@@ -74,10 +83,11 @@ function ScoreBar({ percentage, color, animated = true }: { percentage: number; 
   );
 }
 
-function CircleGauge({ percentage, color }: { percentage: number; color: string }) {
+function CircleGauge({ percentage, color, scoredMax }: { percentage: number; color: string; scoredMax: number }) {
   const radius = 40;
   const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (percentage / 100) * circumference;
+  const displayPct = Math.min(percentage, 100);
+  const strokeDashoffset = circumference - (displayPct / 100) * circumference;
   return (
     <div className="relative inline-flex items-center justify-center">
       <svg width="100" height="100" viewBox="0 0 100 100" className="-rotate-90">
@@ -92,7 +102,7 @@ function CircleGauge({ percentage, color }: { percentage: number; color: string 
       </svg>
       <div className="absolute flex flex-col items-center">
         <span className="text-xl font-bold" style={{ color: "var(--color-text)" }}>{percentage}</span>
-        <span className="text-xs" style={{ color: "var(--color-text-light)" }}>/100</span>
+        <span className="text-xs" style={{ color: "var(--color-text-light)" }}>/{scoredMax}</span>
       </div>
     </div>
   );
@@ -110,8 +120,44 @@ function CompletenessWarning({ completeness }: { completeness: number }) {
       <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" style={{ color: "var(--color-accent, #f4a261)" }} />
       <p className="text-xs leading-relaxed" style={{ color: "var(--color-text)" }}>
         <span className="font-semibold">Score based on {completeness}% of profile data.</span>{" "}
-        Complete your adopter profile and ensure the shelter has filled in the pet's behavioural assessment for a more accurate result.
+        Complete your adopter profile for a more accurate result.
       </p>
+    </motion.div>
+  );
+}
+
+function PendingShelterData({ unscoredFactors, scoredMax }: { unscoredFactors: UnscoredFactor[]; scoredMax: number }) {
+  if (!unscoredFactors || unscoredFactors.length === 0) return null;
+  const missingMax = 100 - scoredMax;
+  return (
+    <motion.div
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: "auto" }}
+      className="mx-5 mb-3 px-3 py-2.5 rounded-lg"
+      style={{
+        background: "color-mix(in srgb, #f59e0b 10%, transparent)",
+        border: "1px solid color-mix(in srgb, #f59e0b 35%, transparent)",
+      }}
+    >
+      <div className="flex items-start gap-2">
+        <Lock className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" style={{ color: "#b45309" }} />
+        <div>
+          <p className="text-xs font-semibold" style={{ color: "#92400e" }}>
+            {missingMax} points pending shelter data
+          </p>
+          <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "#78350f" }}>
+            These factors couldn't be scored because the shelter hasn't filled in the pet's profile. Your score will update automatically when they do.
+          </p>
+          <ul className="mt-1.5 space-y-0.5">
+            {unscoredFactors.map((f, i) => (
+              <li key={i} className="text-xs flex items-center gap-1.5" style={{ color: "#92400e" }}>
+                <span className="w-1 h-1 rounded-full bg-amber-500 flex-shrink-0" />
+                <span className="font-medium">{f.label}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
     </motion.div>
   );
 }
@@ -176,6 +222,9 @@ export function CompatibilityScorePanel({ petId, petName }: CompatibilityScorePa
 
   if (!data) return null;
 
+  // Use adjustedPercentage if available (new engine), fall back to percentage for old cached data
+  const displayPercentage = data.adjustedPercentage ?? data.percentage;
+  const displayMax = data.scoredMax ?? data.maxScore;
   const gradeColor = COLOR_MAP[data.grade.color] ?? COLOR_MAP.warning;
 
   return (
@@ -202,7 +251,7 @@ export function CompatibilityScorePanel({ petId, petName }: CompatibilityScorePa
 
       {/* Score summary */}
       <div className="px-5 py-5 flex items-center gap-6">
-        <CircleGauge percentage={data.percentage} color={gradeColor} />
+        <CircleGauge percentage={displayPercentage} color={gradeColor} scoredMax={displayMax} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-lg">{data.grade.emoji}</span>
@@ -216,11 +265,23 @@ export function CompatibilityScorePanel({ petId, petName }: CompatibilityScorePa
           <p className="text-sm leading-relaxed" style={{ color: "var(--color-text-light)" }}>
             {data.recommendation}
           </p>
+          {/* Raw score note when denominator < 100 */}
+          {displayMax < 100 && (
+            <p className="text-xs mt-1.5" style={{ color: "var(--color-text-light)", opacity: 0.65 }}>
+              Raw: {data.totalScore} pts · {100 - displayMax} pts pending shelter data
+            </p>
+          )}
         </div>
       </div>
 
-      {/* Data completeness warning */}
+      {/* Data completeness warning (adopter profile gap) */}
       <CompletenessWarning completeness={data.dataCompleteness ?? 100} />
+
+      {/* Pending shelter data banner (separate concern — pet profile gap) */}
+      <PendingShelterData
+        unscoredFactors={data.unscoredFactors ?? []}
+        scoredMax={displayMax}
+      />
 
       {/* AI Adopter Summary */}
       {data.aiInsights?.adopter && (
@@ -256,10 +317,15 @@ export function CompatibilityScorePanel({ petId, petName }: CompatibilityScorePa
             {data.factors.map((factor, idx) => {
               const Icon = FACTOR_ICONS[factor.label] ?? Info;
               const isExpanded = expandedFactor === idx;
-              const factorColor =
-                factor.percentage >= 75 ? COLOR_MAP.success
+
+              // Locked factors (missing pet data): neutral grey, not error red
+              const factorColor = factor.isPetDataMissing
+                ? "var(--color-text-light)"
+                : factor.percentage >= 75 ? COLOR_MAP.success
                 : factor.percentage >= 40 ? COLOR_MAP.warning
                 : COLOR_MAP.error;
+
+              const barColor = factor.isPetDataMissing ? "var(--color-border)" : factorColor;
 
               return (
                 <div key={idx}>
@@ -276,18 +342,24 @@ export function CompatibilityScorePanel({ petId, petName }: CompatibilityScorePa
                             {factor.label}
                           </span>
                           <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
-                            {factor.isFallback && (
-                              <span title="Based on incomplete data" className="text-xs opacity-60" style={{ color: "var(--color-accent, #f4a261)" }}>~</span>
-                            )}
-                            {factor.flag && (
-                              <AlertTriangle className="w-3 h-3" style={{ color: "var(--color-error, #ef4444)" }} />
+                            {factor.isPetDataMissing ? (
+                              <span title="Pending shelter data" aria-label="Pending shelter data"><Lock className="w-3 h-3" style={{ color: "var(--color-text-light)" }} /></span>
+                            ) : (
+                              <>
+                                {factor.isFallback && (
+                                  <span title="Based on incomplete data" className="text-xs opacity-60" style={{ color: "var(--color-accent, #f4a261)" }}>~</span>
+                                )}
+                                {factor.flag && (
+                                  <AlertTriangle className="w-3 h-3" style={{ color: "var(--color-error, #ef4444)" }} />
+                                )}
+                              </>
                             )}
                             <span className="text-xs font-semibold" style={{ color: factorColor }}>
-                              {factor.score}/{factor.maxScore}
+                              {factor.isPetDataMissing ? "—" : `${factor.score}/${factor.maxScore}`}
                             </span>
                           </div>
                         </div>
-                        <ScoreBar percentage={factor.percentage} color={factorColor} />
+                        <ScoreBar percentage={factor.isPetDataMissing ? 0 : factor.percentage} color={barColor} />
                       </div>
                       <ChevronRight
                         className="w-3 h-3 flex-shrink-0 transition-transform"
@@ -308,14 +380,23 @@ export function CompatibilityScorePanel({ petId, petName }: CompatibilityScorePa
                         <p className="text-xs leading-relaxed pb-3 pl-7 pr-6" style={{ color: "var(--color-text-light)" }}>
                           {factor.explanation}
                         </p>
-                        {factor.flag && (
+                        {factor.isPetDataMissing && (
+                          <div className="ml-7 mr-6 mb-3 flex items-start gap-1.5 px-2.5 py-2 rounded-lg"
+                            style={{ background: "color-mix(in srgb, #f59e0b 8%, transparent)", border: "1px solid color-mix(in srgb, #f59e0b 25%, transparent)" }}>
+                            <Lock className="w-3 h-3 flex-shrink-0 mt-0.5" style={{ color: "#b45309" }} />
+                            <p className="text-xs leading-relaxed" style={{ color: "#92400e" }}>
+                              This factor is not counted against your score — it will be included once the shelter updates the pet's profile.
+                            </p>
+                          </div>
+                        )}
+                        {!factor.isPetDataMissing && factor.flag && (
                           <div className="ml-7 mr-6 mb-3 flex items-start gap-1.5 px-2.5 py-2 rounded-lg"
                             style={{ background: "color-mix(in srgb, var(--color-error) 8%, transparent)", border: "1px solid color-mix(in srgb, var(--color-error) 20%, transparent)" }}>
                             <AlertTriangle className="w-3 h-3 flex-shrink-0 mt-0.5" style={{ color: "var(--color-error, #ef4444)" }} />
                             <p className="text-xs leading-relaxed" style={{ color: "var(--color-text)" }}>{factor.flag}</p>
                           </div>
                         )}
-                        {factor.isFallback && (
+                        {!factor.isPetDataMissing && factor.isFallback && (
                           <p className="text-xs pl-7 pr-6 pb-3 italic opacity-60" style={{ color: "var(--color-text-light)" }}>
                             ~ This factor was scored conservatively due to incomplete data.
                           </p>

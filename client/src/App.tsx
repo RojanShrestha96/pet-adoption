@@ -51,6 +51,8 @@ import { PaymentSuccess } from "./pages/public/PaymentSuccess";
 import { PaymentFailure } from "./pages/public/PaymentFailure";
 import { ScrollToTop } from "./components/layout/ScrollToTop";
 import { GeoTestPage } from "./pages/public/GeoTestPage";
+import { AdoptionPaymentSuccess } from "./pages/adoption/AdoptionPaymentSuccess";
+import { AdoptionPaymentFailure } from "./pages/adoption/AdoptionPaymentFailure";
 
 export function App() {
   return (
@@ -197,6 +199,9 @@ export function App() {
                     </div>
                   }
                 />
+                {/* Adoption payment callbacks — NO auth guard (eSewa external redirect) */}
+                <Route path="/adoption-payment/success/:appId" element={<AdoptionPaymentSuccess />} />
+                <Route path="/adoption-payment/failure/:appId" element={<AdoptionPaymentFailure />} />
                 <Route
                   path="/pet/:id"
                   element={

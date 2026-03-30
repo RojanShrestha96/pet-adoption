@@ -94,11 +94,22 @@ export const createApplication = async (req, res) => {
       });
     }
 
+    // Fetch live profile to create a snapshot
+    const liveProfile = await AdopterProfile.findOne({ adopter: adopterId });
+    let compatibilityScore = null;
+    
+    if (liveProfile && pet) {
+      // Use the fully populated pet object we fetched earlier 
+      compatibilityScore = calculateCompatibility(liveProfile, pet);
+    }
+
     // Create the application
     const application = new AdoptionApplication({
       pet: petId,
       shelter: pet.shelter,
       adopter: adopterId,
+      profileSnapshot: liveProfile ? liveProfile.toObject() : null,
+      compatibilitySnapshot: compatibilityScore,
       screening,
       personalInfo,
       household,
@@ -112,12 +123,11 @@ export const createApplication = async (req, res) => {
     // Trigger AI insights generation in the background (fire-and-forget)
     (async () => {
       try {
-        const profileData = application.profileSnapshot || (await AdopterProfile.findOne({ adopter: adopterId }));
-        if (profileData && application.pet) {
-          const compatibilityScore = calculateCompatibility(profileData, application.pet);
+        if (liveProfile && pet && compatibilityScore) {
+          // IMPORTANT: Pass the fully populated `pet` object here, not `application.pet` (which is an ObjectId)
           
           // Generate Adopter Insights
-          generateAdopterInsights(compatibilityScore, application.pet, profileData)
+          generateAdopterInsights(compatibilityScore, pet, liveProfile)
             .then(async (insights) => {
               application.aiInsights = { 
                 ...application.aiInsights,
@@ -127,7 +137,7 @@ export const createApplication = async (req, res) => {
             }).catch(e => console.error("Async Adopter AI Insight error:", e));
 
           // Generate Shelter Insights
-          generateShelterInsights(compatibilityScore, application.pet, profileData)
+          generateShelterInsights(compatibilityScore, pet, liveProfile)
             .then(async (insights) => {
               application.aiInsights = { 
                 ...application.aiInsights,
@@ -277,9 +287,17 @@ export const getApplicationById = async (req, res) => {
       profileData = await AdopterProfile.findOne({ adopter: application.adopter._id });
     }
 
-    let compatibilityScore = null;
-    if (application.pet && profileData) {
-      compatibilityScore = calculateCompatibility(profileData, application.pet);
+    // Use compatibility snapshot directly to ensure an accurate historical score
+    let compatibilityScore = application.compatibilitySnapshot;
+    
+    // If no compatibility snapshot (legacy applications) and we have profile data, recalculate it live. 
+    // IMPORTANT: Because application.pet is restricted heavily by `.populate()`, we must fetch the FULL 
+    // pet object here for the compatibility engine to properly assess medical and behavioral vectors.
+    if (!compatibilityScore && application.pet && profileData) {
+      const fullPet = await Pet.findById(application.pet._id);
+      if (fullPet) {
+        compatibilityScore = calculateCompatibility(profileData, fullPet);
+      }
     }
 
     // AI Insights Generation (Shelter) - BACKGROUND TRIGGER
@@ -297,7 +315,9 @@ export const getApplicationById = async (req, res) => {
       // Trigger generation in background
       (async () => {
         try {
-          const shelterInsights = await generateShelterInsights(compatibilityScore, application.pet, profileData);
+          // fetch full pet to give AI complete context instead of just restricted populated fields
+          const fullSafePet = await Pet.findById(application.pet._id);
+          const shelterInsights = await generateShelterInsights(compatibilityScore, fullSafePet || application.pet, profileData);
           const currentApp = await AdoptionApplication.findById(application._id);
           if (currentApp) {
             currentApp.aiInsights.shelter = {
@@ -599,13 +619,27 @@ export const getShelterApplicationStats = async (req, res) => {
       meeting_completed: 0,
       follow_up_required: 0,
       follow_up_scheduled: 0,
+      finalizing: 0,
       rejected: 0,
       completed: 0
     };
 
+    const finalizingStatuses = [
+      'finalization_pending',
+      'payment_pending',
+      'payment_failed',
+      'contract_generated',
+      'contract_signed',
+      'handover_pending'
+    ];
+
     stats.forEach(stat => {
       formattedStats[stat._id] = stat.count;
       formattedStats.total += stat.count;
+      
+      if (finalizingStatuses.includes(stat._id)) {
+        formattedStats.finalizing += stat.count;
+      }
     });
 
     res.json(formattedStats);
@@ -647,9 +681,17 @@ export const getAdopterApplicationById = async (req, res) => {
       profileData = await AdopterProfile.findOne({ adopter: application.adopter._id });
     }
 
-    let compatibilityScore = null;
-    if (application.pet && profileData) {
-       compatibilityScore = calculateCompatibility(profileData, application.pet);
+    // Use compatibility snapshot directly to ensure an accurate historical score
+    let compatibilityScore = application.compatibilitySnapshot;
+    
+    // If no compatibility snapshot (legacy applications) and we have profile data, recalculate it live.
+    // IMPORTANT: Because application.pet is restricted heavily by `.populate()`, we must fetch the FULL 
+    // pet object here for the compatibility engine to properly assess medical and behavioral vectors.
+    if (!compatibilityScore && application.pet && profileData) {
+       const fullPet = await Pet.findById(application.pet._id);
+       if (fullPet) {
+         compatibilityScore = calculateCompatibility(profileData, fullPet);
+       }
     }
 
     // AI Insights Generation (Adopter) - BACKGROUND TRIGGER
@@ -667,7 +709,9 @@ export const getAdopterApplicationById = async (req, res) => {
       // Trigger generation in background
       (async () => {
         try {
-          const adopterInsights = await generateAdopterInsights(compatibilityScore, application.pet, profileData);
+          // fetch full pet to give AI complete context instead of just restricted populated fields
+          const fullSafePet = await Pet.findById(application.pet._id);
+          const adopterInsights = await generateAdopterInsights(compatibilityScore, fullSafePet || application.pet, profileData);
           const currentApp = await AdoptionApplication.findById(application._id);
           if (currentApp) {
             currentApp.aiInsights.adopter = {

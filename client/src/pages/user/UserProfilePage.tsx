@@ -1017,9 +1017,10 @@ export function UserProfilePage() {
                         <label className="block text-sm font-medium mb-1" style={{ color: "var(--color-text)" }}>Monthly Pet Budget</label>
                         <select disabled={adopterProfileEditing !== "financial"} className="w-full px-3 py-2 border-2 rounded-xl" style={{ borderColor: "var(--color-border)", background: "var(--color-card)", color: "var(--color-text)" }} value={financialDraft.monthlyPetBudget ?? ""} onChange={(e) => setFinancialDraft((p: any) => ({ ...p, monthlyPetBudget: e.target.value }))}>
                           <option value="">Select</option>
-                          <option value="under-100">Under Rs 100/month</option>
-                          <option value="100-300">Rs 100–300/month</option>
-                          <option value="over-300">Over Rs 300/month</option>
+                          <option value="under-5000">Under Rs 5,000/month</option>
+                          <option value="5000-10000">Rs 5,000–10,000/month</option>
+                          <option value="10000-20000">Rs 10,000–20,000/month</option>
+                          <option value="over-20000">Over Rs 20,000/month</option>
                         </select>
                       </div>
                       <div>

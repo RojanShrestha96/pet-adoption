@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { 
   ArrowLeft, 
   Upload, 
@@ -16,7 +16,13 @@ import {
   Mail,
   Ruler,
   Info,
-  PawPrint
+  PawPrint,
+  ChevronDown,
+  ChevronUp,
+  Brain,
+  Check,
+  Zap,
+  Star
 } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Card } from "../../components/ui/Card";
@@ -26,6 +32,7 @@ import {
   ApplicationStatus,
 } from "../../components/adoption/ApplicationTimeline";
 import { AvailabilitySubmission } from "../../components/adoption/AvailabilitySubmission";
+import { AdoptionFinalizationStepper } from "../../components/adoption/AdoptionFinalizationStepper";
 import { useToast } from "../../components/ui/Toast";
 import axios from "axios";
 
@@ -73,6 +80,26 @@ interface Application {
     secondMeetingScheduled?: boolean;
   };
   createdAt: string;
+  compatibilityScore?: {
+    adjustedPercentage: number;
+    grade: string;
+    confidenceLevel: string;
+    factors: Array<{
+      label: string;
+      score: number;
+      maxScore: number;
+      explanation: string;
+      flag?: string | null;
+    }>;
+  };
+  aiInsights?: {
+    adopter?: {
+      summary?: string;
+      suggestion?: string;
+      status: string;
+      error?: string;
+    }
+  };
 }
 
 export function ApplicationTrackingPage() {
@@ -87,6 +114,8 @@ export function ApplicationTrackingPage() {
   const [submittingAvailability, setSubmittingAvailability] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [isStatusExpanded, setIsStatusExpanded] = useState(true);
+  const [isAiExpanded, setIsAiExpanded] = useState(false);
 
   useEffect(() => {
     const fetchApplication = async () => {
@@ -128,12 +157,19 @@ export function ApplicationTrackingPage() {
         // If followUpCount > 0, it means we are in the follow-up loop
         return followUpCount > 0 ? 'follow-up' : 'meet-greet';
       case 'meeting_completed':
-        // If followUpCount > 0, we are at follow-up complete stage
-        return followUpCount > 0 ? 'follow-up-completed' : 'meet-greet';
+        return 'finalize';
       case 'follow_up_required':
       case 'follow_up_scheduled':
         return 'follow-up';
       case 'approved': return 'approved';
+      case 'finalization_pending':
+      case 'payment_pending':
+      case 'payment_failed':
+      case 'contract_generated':
+        return 'finalize';
+      case 'contract_signed':
+      case 'handover_pending':
+        return 'finalized';
       case 'completed': return 'adopted';
       case 'rejected': return 'closed'; // Show as final "closed" state
       default: return 'submitted';
@@ -159,6 +195,16 @@ export function ApplicationTrackingPage() {
         return `The shelter would like to schedule a follow-up discussion regarding your application for ${petName}.`;
       case 'follow_up_scheduled':
         return `A follow-up meeting has been scheduled for your application with ${petName}.`;
+      case 'finalization_pending':
+        return 'The shelter is preparing the final adoption fee. Please check back shortly.';
+      case 'payment_pending':
+      case 'payment_failed':
+        return `Please complete the payment for the adoption fee to continue the finalization for ${petName}.`;
+      case 'contract_generated':
+        return 'Payment received! Please sign the adoption contract.';
+      case 'contract_signed':
+      case 'handover_pending':
+        return `Contract signed! The shelter is preparing ${petName} for handover.`;
       case 'completed':
         return `Congratulations on adopting ${petName}! 🎉`;
       case 'rejected':
@@ -322,36 +368,147 @@ export function ApplicationTrackingPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Timeline */}
           <div className="lg:col-span-2">
-            <Card padding="lg">
-              <h2
-                className="text-2xl font-bold mb-6"
-                style={{
-                  color: "var(--color-text)",
-                }}
+            <Card padding="none" className="overflow-hidden mb-6">
+              <div 
+                className="p-6 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors border-b border-gray-100"
+                onClick={() => setIsStatusExpanded(!isStatusExpanded)}
               >
-                Application Status
-              </h2>
-              <ApplicationTimeline 
-                currentStatus={currentStatus}
-                hasFollowUp={followUpCount > 0}
-                meetingOutcome={application.meetAndGreet?.outcome as 'successful' | 'needs_followup' | 'not_a_match' | undefined}
-                isRejected={application.status === 'rejected'}
-                actualStatus={application.status}
-              />
-              
-              {/* Contextual status message */}
-              {application.status !== 'completed' && application.status !== 'rejected' && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 10 }} 
-                  animate={{ opacity: 1, y: 0 }}
-                  className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200"
+                <h2
+                  className="text-2xl font-bold"
+                  style={{ color: "var(--color-text)" }}
                 >
-                  <p className="text-sm text-blue-900">
-                    {getStatusMessage(application.status, petName)}
-                  </p>
-                </motion.div>
-              )}
+                  Application Status
+                </h2>
+                <button className="p-2 rounded-full hover:bg-gray-200 transition-colors text-gray-500">
+                  {isStatusExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                </button>
+              </div>
+
+              <AnimatePresence>
+                {isStatusExpanded && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="p-6 pt-4">
+                      <ApplicationTimeline 
+                        currentStatus={currentStatus}
+                        hasFollowUp={followUpCount > 0}
+                        meetingOutcome={application.meetAndGreet?.outcome as 'successful' | 'needs_followup' | 'not_a_match' | undefined}
+                        isRejected={application.status === 'rejected'}
+                        actualStatus={application.status}
+                      />
+                      
+                      {/* Contextual status message */}
+                      {application.status !== 'completed' && application.status !== 'rejected' && (
+                        <motion.div 
+                          initial={{ opacity: 0, y: 10 }} 
+                          animate={{ opacity: 1, y: 0 }}
+                          className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-200 shadow-sm"
+                        >
+                          <div className="flex items-start gap-3">
+                            <Info className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+                            <p className="text-sm font-medium text-blue-900 leading-relaxed">
+                              {getStatusMessage(application.status, petName)}
+                            </p>
+                          </div>
+                        </motion.div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </Card>
+
+            {/* AI Compatibility Card */}
+            {application.compatibilityScore && (
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mt-6 mb-6">
+                <Card padding="lg" className="border-2 border-[var(--color-primary)]/20 bg-gradient-to-b from-[var(--color-primary)]/5 to-transparent relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-[var(--color-primary)]/10 rounded-full blur-3xl -mr-16 -mt-16" />
+                  
+                  <div className="flex items-start gap-4 mb-6 relative">
+                    <div className="w-12 h-12 rounded-2xl bg-[var(--color-primary)]/10 flex items-center justify-center shrink-0">
+                      <Brain className="w-6 h-6 text-[var(--color-primary)]" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                        Compatibility Assessment
+                        {application.compatibilityScore.grade === "A+" && (
+                          <span className="px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 text-xs font-bold uppercase tracking-wider flex items-center gap-1">
+                            <Star className="w-3 h-3 fill-current" /> Perfect Match
+                          </span>
+                        )}
+                      </h3>
+                      <p className="text-sm text-gray-600 mt-1">Based on your lifestyle and {petName}'s needs.</p>
+                    </div>
+                    
+                    <div className="ml-auto text-right">
+                      <div className="text-3xl font-black text-[var(--color-primary)]">
+                        {application.compatibilityScore.adjustedPercentage}%
+                      </div>
+                      <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        Match Score
+                      </div>
+                    </div>
+                  </div>
+
+                  {application.aiInsights?.adopter?.summary && (
+                    <div className="p-4 bg-white/60 backdrop-blur-sm border border-[var(--color-primary)]/10 rounded-xl mb-4 text-sm text-gray-700 leading-relaxed shadow-sm">
+                      {application.aiInsights.adopter.summary}
+                    </div>
+                  )}
+
+                  <div className="mt-2">
+                    <button 
+                      onClick={() => setIsAiExpanded(!isAiExpanded)}
+                      className="flex items-center gap-2 text-sm font-semibold text-[var(--color-primary)] hover:underline"
+                    >
+                      {isAiExpanded ? 'Hide Factor Breakdown' : 'View Detailed Factor Breakdown'}
+                      {isAiExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </button>
+
+                    <AnimatePresence>
+                      {isAiExpanded && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="pt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {application.compatibilityScore.factors.map((factor, idx) => {
+                              const pct = Math.round((factor.score / factor.maxScore) * 100);
+                              return (
+                                <div key={idx} className="p-3 bg-white rounded-xl border border-gray-100 shadow-sm">
+                                  <div className="flex justify-between items-center mb-1.5">
+                                    <span className="text-sm font-semibold text-gray-800">{factor.label}</span>
+                                    <span className={`text-xs font-bold ${pct >= 80 ? 'text-green-600' : pct >= 50 ? 'text-amber-600' : 'text-red-600'}`}>
+                                      {factor.score}/{factor.maxScore}
+                                    </span>
+                                  </div>
+                                  <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden mb-2">
+                                    <div 
+                                      className={`h-full rounded-full transition-all duration-1000 ${pct >= 80 ? 'bg-green-500' : pct >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
+                                      style={{ width: `${pct}%` }}
+                                    />
+                                  </div>
+                                  <p className="text-xs text-gray-500 line-clamp-2" title={factor.explanation}>
+                                    {factor.explanation}
+                                  </p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </Card>
+              </motion.div>
+            )}
 
             {/* Meet & Greet Section - Status-based Display */}
             {/* Status: approved OR follow_up_required - Show availability submission */}
@@ -611,6 +768,25 @@ export function ApplicationTrackingPage() {
                     </div>
                   )}
                 </Card>
+              </motion.div>
+            )}
+
+            {/* Finalization Pipeline Stepper */}
+            {['finalization_pending', 'payment_pending', 'payment_failed', 'contract_generated', 'contract_signed', 'handover_pending', 'completed'].includes(application.status) && (
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mt-8">
+                <AdoptionFinalizationStepper 
+                  applicationId={application._id} 
+                  application={application} 
+                  onRefresh={() => {
+                    const token = localStorage.getItem("token");
+                    if (token) {
+                      axios.get(
+                        `http://localhost:5000/api/applications/adopter/${applicationId}`,
+                        { headers: { Authorization: `Bearer ${token}` } }
+                      ).then(res => setApplication(res.data)).catch(console.error);
+                    }
+                  }} 
+                />
               </motion.div>
             )}
 

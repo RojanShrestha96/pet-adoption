@@ -34,33 +34,63 @@ export function HomePage() {
   const [shelters, setShelters] = useState<any[]>([]);
   const [loadingShelters, setLoadingShelters] = useState(true);
   const [loadingPets, setLoadingPets] = useState(true);
+  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
+
+  const fetchData = async (location?: {lat: number, lng: number}) => {
+    try {
+      setLoadingPets(true);
+      setLoadingShelters(true);
+      
+      // Fetch pets
+      const petsRes = await axios.get("http://localhost:5000/api/pets?limit=20");
+      const allPets = petsRes.data.pets || [];
+      
+      // Randomize pets
+      const shuffled = [...allPets].sort(() => 0.5 - Math.random());
+      setFeaturedPets(shuffled.slice(0, 6));
+
+      // Fetch shelters
+      let shelterUrl = "http://localhost:5000/api/shelter";
+      if (location) {
+        shelterUrl += `?lat=${location.lat}&lng=${location.lng}`;
+      }
+      const sheltersRes = await axios.get(shelterUrl);
+      setShelters(sheltersRes.data);
+    } catch (err) {
+      console.error("Failed to fetch data", err);
+      // Fallback to mock data if fetch fails
+      setFeaturedPets(mockPets.filter((p) => p.adoptionStatus === "available").slice(0, 6));
+    } finally {
+      setLoadingShelters(false);
+      setLoadingPets(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoadingPets(true);
-        // Fetch pets
-        const petsRes = await axios.get("http://localhost:5000/api/pets?limit=20");
-        const allPets = petsRes.data.pets || [];
-        
-        // Randomize pets
-        const shuffled = [...allPets].sort(() => 0.5 - Math.random());
-        setFeaturedPets(shuffled.slice(0, 6));
-
-        // Fetch shelters
-        const sheltersRes = await axios.get("http://localhost:5000/api/shelter");
-        setShelters(sheltersRes.data);
-      } catch (err) {
-        console.error("Failed to fetch data", err);
-        // Fallback to mock data if fetch fails
-        setFeaturedPets(mockPets.filter((p) => p.adoptionStatus === "available").slice(0, 6));
-      } finally {
-        setLoadingShelters(false);
-        setLoadingPets(false);
-      }
-    };
     fetchData();
   }, []);
+
+  const handleSetLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser");
+      return;
+    }
+
+    setLoadingShelters(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        const newLocation = { lat: latitude, lng: longitude };
+        setUserLocation(newLocation);
+        fetchData(newLocation);
+      },
+      (error) => {
+        console.error("Geolocation error:", error);
+        alert("Unable to retrieve your location. Showing default shelters.");
+        setLoadingShelters(false);
+      }
+    );
+  };
 
 
 
@@ -628,11 +658,9 @@ export function HomePage() {
                 variant="outline"
                 size="lg"
                 icon={<MapPin className="w-5 h-5" />}
-                onClick={() => {
-                  alert("Location feature coming soon!");
-                }}
+                onClick={handleSetLocation}
               >
-                Set Location
+                {userLocation ? "Location Updated" : "Set Location"}
               </Button>
             </motion.div>
           </motion.div>
@@ -656,7 +684,7 @@ export function HomePage() {
                       id: shelter._id, // Map _id to id for component compatibility
                       name: shelter.name,
                       location: shelter.address || "Location varies",
-                      distance: "2.5 miles", // Mock distance for now
+                      distance: shelter.distance || "Location varies",
                       image: shelter.logo || "",
                       petsAvailable: shelter.totalPets || 0,
                     }}
