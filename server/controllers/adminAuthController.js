@@ -1,6 +1,7 @@
 import Admin from "../models/Admin.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { logAdminAction } from "../utils/auditLogger.js";
 
 // Maximum login attempts before account lock
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -69,6 +70,9 @@ export const adminLogin = async (req, res) => {
     admin.lockUntil = null;
     admin.lastLogin = new Date();
     await admin.save();
+
+    // Log the action
+    await logAdminAction(admin._id, "LOGIN", "System", "Admin logged in successfully", "success");
 
     // Generate JWT token
     const token = jwt.sign(
@@ -168,6 +172,14 @@ export const updateAdminProfile = async (req, res) => {
 
     await admin.save();
 
+    await logAdminAction(
+      adminId, 
+      currentPassword && newPassword ? "UPDATE_PASSWORD" : "UPDATE_PROFILE", 
+      "Self", 
+      "Updated profile settings", 
+      "info"
+    );
+
     return res.status(200).json({
       message: "Profile updated successfully",
       admin: {
@@ -224,6 +236,14 @@ export const createAdmin = async (req, res) => {
       role,
     });
 
+    await logAdminAction(
+      req.user.userId, 
+      "CREATE_ADMIN", 
+      `Admin: ${newAdmin.username}`, 
+      `Created new admin with role ${role}`, 
+      "success"
+    );
+
     return res.status(201).json({
       message: "Admin created successfully",
       admin: {
@@ -266,6 +286,14 @@ export const deleteAdmin = async (req, res) => {
     if (!admin) {
       return res.status(404).json({ message: "Admin not found" });
     }
+
+    await logAdminAction(
+      req.user.userId, 
+      "DELETE_ADMIN", 
+      `Admin: ${admin.username}`, 
+      `Deleted admin account`, 
+      "danger"
+    );
 
     return res.status(200).json({ message: "Admin deleted successfully" });
   } catch (error) {

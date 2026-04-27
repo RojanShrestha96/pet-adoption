@@ -125,7 +125,7 @@ const adopterProfileSchema = new mongoose.Schema(
       // V2.1: NPR-aligned tiers — replaces incorrect USD-era enum
       monthlyPetBudget: {
         type: String,
-        enum: ["under-5000", "5000-10000", "10000-20000", "20000+", ""],
+        enum: ["under-5000", "5000-10000", "10000-20000", "over-20000", "under-100", "100-300", "over-300", ""],
       },
 
       // ── Life stability context (Enhanced tier) ─────────────────
@@ -186,8 +186,8 @@ const adopterProfileSchema = new mongoose.Schema(
     // Stored as GeoJSON Point for potential future $near queries.
     // coordinates: [longitude, latitude] (GeoJSON order)
     userLocation: {
-      type: { type: String, enum: ['Point'], default: 'Point' },
-      coordinates: { type: [Number], default: undefined }, // [lng, lat]
+      type: { type: String, enum: ['Point'] },
+      coordinates: { type: [Number] }, // [lng, lat]
       formattedAddress: { type: String }, // display label
     },
 

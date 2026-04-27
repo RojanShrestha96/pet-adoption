@@ -74,15 +74,16 @@ export const submitAvailability = async (req, res) => {
 
     await application.save();
 
-    // Notify shelter
-    await Notification.create({
-      recipient: application.shelter._id,
-      recipientType: 'shelter',
-      type: 'application',
-      title: 'New Meet & Greet Availability Submitted',
-      message: `${req.user.name || 'An adopter'} has submitted availability for a meet & greet with ${application.pet.name}.`,
-      relatedLink: `/shelter/applications/${application._id}`
-    });
+    if (application.shelter) {
+      await Notification.create({
+        recipient: application.shelter._id,
+        recipientType: 'shelter',
+        type: 'application',
+        title: 'New Meet & Greet Availability Submitted',
+        message: `${req.user.name || 'An adopter'} has submitted availability for a meet & greet with ${application.pet?.name || 'a pet'}.`,
+        relatedLink: `/shelter/applications/${application._id}`
+      });
+    }
 
     // Notify adopter (confirmation)
     await Notification.create({
@@ -218,14 +219,16 @@ export const scheduleMeetAndGreet = async (req, res) => {
       evening: '3:00 PM - 6:00 PM'
     };
 
-    await Notification.create({
-      recipient: application.adopter._id,
-      recipientType: 'adopter',
-      type: 'success',
-      title: 'Meet & Greet Scheduled! 🐾',
-      message: `Your meet & greet with ${application.pet.name} is scheduled for ${selectedSlot.date}${specificTime ? ` at ${specificTime}` : ` (${timeSlotDisplay[selectedSlot.timeSlot]})`}. Location: ${application.meetAndGreet.location || 'TBD'}`,
-      relatedLink: `/application-tracking/${application._id}`
-    });
+    if (application.adopter) {
+      await Notification.create({
+        recipient: application.adopter._id,
+        recipientType: 'adopter',
+        type: 'success',
+        title: 'Meet & Greet Scheduled! 🐾',
+        message: `Your meet & greet with ${application.pet?.name || 'the pet'} is scheduled for ${selectedSlot.date}${specificTime ? ` at ${specificTime}` : ` (${timeSlotDisplay[selectedSlot.timeSlot]})`}. Location: ${application.meetAndGreet.location || 'TBD'}`,
+        relatedLink: `/application-tracking/${application._id}`
+      });
+    }
 
     res.json({
       message: "Meeting scheduled successfully",
@@ -348,9 +351,11 @@ export const completeMeetAndGreet = async (req, res) => {
         application.status = 'rejected';
         
         // Reopen pet for other adopters
-        await Pet.findByIdAndUpdate(application.pet._id, {
-          adoptionStatus: 'available'
-        });
+        if (application.pet) {
+          await Pet.findByIdAndUpdate(application.pet._id, {
+            adoptionStatus: 'available'
+          });
+        }
         break;
         
       case 'needs_followup':
@@ -398,14 +403,16 @@ export const completeMeetAndGreet = async (req, res) => {
         break;
     }
 
-    await Notification.create({
-      recipient: application.adopter._id,
-      recipientType: 'adopter',
-      type: notificationType,
-      title: notificationTitle,
-      message: notificationMessage,
-      relatedLink: `/application-tracking/${application._id}`
-    });
+    if (application.adopter) {
+      await Notification.create({
+        recipient: application.adopter._id,
+        recipientType: 'adopter',
+        type: notificationType,
+        title: notificationTitle,
+        message: notificationMessage,
+        relatedLink: `/application-tracking/${application._id}`
+      });
+    }
 
     res.json({
       message: "Meeting completed successfully",
@@ -523,15 +530,16 @@ export const requestReschedule = async (req, res) => {
 
     await application.save();
 
-    // Notify shelter
-    await Notification.create({
-      recipient: application.shelter._id,
-      recipientType: 'shelter',
-      type: 'application',
-      title: 'Reschedule Request',
-      message: `${req.user.name || 'An adopter'} has requested to reschedule the meet & greet for ${application.pet.name}.${reason ? ` Reason: ${reason}` : ''}`,
-      relatedLink: `/shelter/applications/${application._id}`
-    });
+    if (application.shelter) {
+      await Notification.create({
+        recipient: application.shelter._id,
+        recipientType: 'shelter',
+        type: 'application',
+        title: 'Reschedule Request',
+        message: `${req.user.name || 'An adopter'} has requested to reschedule the meet & greet for ${application.pet?.name || 'the pet'}.${reason ? ` Reason: ${reason}` : ''}`,
+        relatedLink: `/shelter/applications/${application._id}`
+      });
+    }
 
     res.json({
       message: "Reschedule request submitted successfully",

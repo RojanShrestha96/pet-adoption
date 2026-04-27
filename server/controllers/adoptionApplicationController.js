@@ -283,7 +283,7 @@ export const getApplicationById = async (req, res) => {
 
     // Use snapshot if available, else fetch the live profile for backward compatibility
     let profileData = application.profileSnapshot;
-    if (!profileData) {
+    if (!profileData && application.adopter) {
       profileData = await AdopterProfile.findOne({ adopter: application.adopter._id });
     }
 
@@ -301,7 +301,7 @@ export const getApplicationById = async (req, res) => {
     }
 
     // AI Insights Generation (Shelter) - BACKGROUND TRIGGER
-    if (compatibilityScore && (!application.aiInsights?.shelter?.explanation || application.aiInsights?.shelter?.status === 'none' || application.aiInsights?.shelter?.status === 'error')) {
+    if (compatibilityScore && profileData && (!application.aiInsights?.shelter?.explanation || application.aiInsights?.shelter?.status === 'none' || application.aiInsights?.shelter?.status === 'error')) {
       if (!application.aiInsights) application.aiInsights = {};
       
       // Set generating status and return immediately
@@ -492,32 +492,32 @@ export const updateApplicationStatus = async (req, res) => {
     switch (status) {
       case 'reviewing':
         notificationTitle = 'Application Under Review';
-        notificationMessage = `Your adoption application for ${application.pet.name} is now being reviewed by the shelter.`;
+        notificationMessage = `Your adoption application for ${application.pet?.name || 'the pet'} is now being reviewed by the shelter.`;
         notificationType = 'info';
         break;
       case 'scheduled':
         notificationTitle = 'Home Visit Scheduled';
-        notificationMessage = `Your home visit for ${application.pet.name} has been scheduled for ${scheduledDate}${scheduledTime ? ` at ${scheduledTime}` : ''}.`;
+        notificationMessage = `Your home visit for ${application.pet?.name || 'the pet'} has been scheduled for ${scheduledDate}${scheduledTime ? ` at ${scheduledTime}` : ''}.`;
         notificationType = 'success';
         break;
       case 'approved':
         notificationTitle = 'Application Approved!';
-        notificationMessage = `Congratulations! Your adoption application for ${application.pet.name} has been approved. The shelter will contact you to finalize the adoption.`;
+        notificationMessage = `Congratulations! Your adoption application for ${application.pet?.name || 'the pet'} has been approved. The shelter will contact you to finalize the adoption.`;
         notificationType = 'success';
         break;
       case 'rejected':
         notificationTitle = 'Application Update';
-        notificationMessage = `Unfortunately, your application for ${application.pet.name} was not approved at this time. ${rejectionReason || 'Please contact the shelter for more information.'}`;
+        notificationMessage = `Unfortunately, your application for ${application.pet?.name || 'the pet'} was not approved at this time. ${rejectionReason || 'Please contact the shelter for more information.'}`;
         notificationType = 'warning';
         break;
       case 'completed':
         notificationTitle = 'Adoption Completed!';
-        notificationMessage = `Congratulations on adopting ${application.pet.name}! Thank you for giving them a loving home.`;
+        notificationMessage = `Congratulations on adopting ${application.pet?.name || 'your new pet'}! Thank you for giving them a loving home.`;
         notificationType = 'success';
         break;
     }
 
-    if (notificationTitle) {
+    if (notificationTitle && application.adopter) {
       const statusNotif = await Notification.create({
         recipient: application.adopter._id,
         recipientType: 'adopter',
@@ -676,7 +676,7 @@ export const getAdopterApplicationById = async (req, res) => {
     }
 
     let profileData = application.profileSnapshot;
-    if (!profileData) {
+    if (!profileData && application.adopter) {
       // Fallback
       profileData = await AdopterProfile.findOne({ adopter: application.adopter._id });
     }
@@ -695,7 +695,7 @@ export const getAdopterApplicationById = async (req, res) => {
     }
 
     // AI Insights Generation (Adopter) - BACKGROUND TRIGGER
-    if (compatibilityScore && (!application.aiInsights || !application.aiInsights.adopter || application.aiInsights.adopter.status === 'none' || application.aiInsights.adopter.status === 'error')) {
+    if (compatibilityScore && profileData && (!application.aiInsights || !application.aiInsights.adopter || application.aiInsights.adopter.status === 'none' || application.aiInsights.adopter.status === 'error')) {
       if (!application.aiInsights) application.aiInsights = {};
       
       // Set generating status and return immediately

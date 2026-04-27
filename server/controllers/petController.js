@@ -37,7 +37,15 @@ export const createPet = async (req, res) => {
       temperament,
       goodWithKids,
       goodWithPets,
-      apartmentFriendly
+      apartmentFriendly,
+      behaviour,
+      environment,
+      estimatedMonthlyCost,
+      energyLevel,
+      independenceTolerance,
+      spaceNeeds,
+      vaccinations,
+      vaccinationStatus
     } = req.body;
 
     const pet = new Pet({
@@ -62,7 +70,9 @@ export const createPet = async (req, res) => {
         healthStatus: healthStatus || 'healthy',
         medicalNotes: medicalNotes || '',
         otherConditions: otherConditions || [],
-        medicalDocuments: medicalDocuments || []
+        medicalDocuments: medicalDocuments || [],
+        vaccinations: vaccinations || [],
+        vaccinationStatus: vaccinationStatus || 'unknown'
       },
       temperament: temperament || [],
       compatibility: {
@@ -70,6 +80,12 @@ export const createPet = async (req, res) => {
         goodWithPets: goodWithPets || 'yes',
         apartmentFriendly: apartmentFriendly || false
       },
+      behaviour: behaviour || {},
+      environment: environment || {},
+      estimatedMonthlyCost: estimatedMonthlyCost || 0,
+      energyLevel: energyLevel || undefined,
+      independenceTolerance: independenceTolerance || undefined,
+      spaceNeeds: spaceNeeds || undefined,
       shelter: shelterId,
       adoptionStatus: 'pending-review',
       reviewStatus: 'pending'
@@ -180,14 +196,20 @@ export const updatePet = async (req, res) => {
     // Update fields
     const updateFields = req.body;
     Object.keys(updateFields).forEach(key => {
-      // Handle empty strings for optional enum fields like size
-      if (key === 'size' && updateFields[key] === "") {
+      // Handle empty strings for optional enum fields
+      if ((key === 'size' || key === 'energyLevel' || key === 'spaceNeeds') && updateFields[key] === "") {
         pet[key] = undefined;
         return;
       }
 
-      if (key === 'medical' || key === 'compatibility') {
-        pet[key] = { ...pet[key], ...updateFields[key] };
+      // Special handling for nested objects to prevent data loss
+      if (['medical', 'compatibility', 'behaviour', 'environment', 'age'].includes(key) && typeof updateFields[key] === 'object') {
+        const nestedData = updateFields[key];
+        Object.keys(nestedData).forEach(subKey => {
+          // Access the nested path: pet.medical.healthStatus etc.
+          if (!pet[key]) pet[key] = {};
+          pet[key][subKey] = nestedData[subKey];
+        });
       } else {
         pet[key] = updateFields[key];
       }

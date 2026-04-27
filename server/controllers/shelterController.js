@@ -52,21 +52,57 @@ export const getAllShelters = async (req, res) => {
             { $limit: 4 }
           ]);
         }
-
-        // Format distance for UI
-        shelters = shelters.map(s => ({
-          ...s,
-          distance: s.distance ? (s.distance / 1000).toFixed(1) + " km" : "Location varies"
-        }));
       }
     }
 
     // Step 3: Global fallback if still no shelters found (or no location provided)
     if (shelters.length === 0) {
-      shelters = await Shelter.find({ isSuspended: false })
-        .select("-password -documentation -preferences")
-        .limit(4);
+      // Find shelters that have available pets, prioritized by verification and total count
+      shelters = await Shelter.aggregate([
+        { $match: { isSuspended: false } },
+        {
+          $lookup: {
+            from: "pets",
+            localField: "_id",
+            foreignField: "shelter",
+            as: "availPets",
+            pipeline: [
+              { $match: { adoptionStatus: "available" } },
+              { $project: { _id: 1 } }
+            ]
+          }
+        },
+        {
+          $addFields: {
+            activeCount: { $size: "$availPets" }
+          }
+        },
+        { $sort: { activeCount: -1, isVerified: -1, createdAt: -1 } },
+        { $limit: 4 },
+        { $project: { password: 0, documentation: 0, preferences: 0, availPets: 0 } }
+      ]);
     }
+
+    // Format distance, get real pet count and format address
+    shelters = await Promise.all(shelters.map(async s => {
+      const petCount = await Pet.countDocuments({ shelter: s._id, adoptionStatus: 'available' });
+      
+      let locString = "Location varies";
+      if (s.location && s.location.formattedAddress) {
+        locString = s.location.formattedAddress;
+      } else if (s.city || s.state) {
+        locString = [s.city, s.state].filter(Boolean).join(", ");
+      } else if (s.address) {
+        locString = s.address;
+      }
+
+      return {
+        ...s,
+        distance: s.distance ? (s.distance / 1000).toFixed(1) + " km" : "Location varies",
+        totalPets: petCount,
+        address: locString
+      };
+    }));
     
     res.json(shelters);
   } catch (error) {
@@ -132,6 +168,14 @@ export const updateShelterProfile = async (req, res) => {
 
     const currentShelter = await Shelter.findById(req.user.userId);
     if (!currentShelter) return res.status(404).json({ message: "Shelter not found" });
+
+    // Block documentation updates if shelter is verified
+    if (currentShelter.isVerified && req.body.documentation) {
+      const isDocModified = JSON.stringify(req.body.documentation) !== JSON.stringify(currentShelter.documentation);
+      if (isDocModified) {
+        return res.status(403).json({ message: "Verified shelters cannot modify documentation. Please contact support." });
+      }
+    }
 
     // ── Pre-process Geocoding if address info changes ──
     let newLocation = req.body.location; // might already have coordinates from frontend

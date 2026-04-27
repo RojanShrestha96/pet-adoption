@@ -230,6 +230,7 @@ const adoptionApplicationSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: [
+      // ── Pre-finalization states (unchanged) ───────────────────────────
       'pending',
       'reviewing',
       'approved',
@@ -238,9 +239,29 @@ const adoptionApplicationSchema = new mongoose.Schema({
       'meeting_completed',
       'follow_up_required',
       'follow_up_scheduled',
+      // ── Terminal / rejection states (unchanged) ───────────────────────
       'rejected',
-      'completed',
-      'cancelled'
+      'completed',   // Set ONLY at physical handover (Stage 5). Never earlier.
+      'cancelled',
+      // ── Finalization pipeline states (new) ────────────────────────────
+      // Stage 1: Shelter clicked "Finalize Adoption". Fee auto-calculated
+      //          (with optional staff override). Awaiting fee confirmation.
+      'finalization_pending',
+      // Stage 2: Fee confirmed by shelter staff. Awaiting adopter eSewa payment.
+      'payment_pending',
+      // Stage 2 error: All 3 eSewa attempts exhausted. Pipeline paused.
+      //                Shelter is notified. Requires manual shelter action.
+      'payment_failed',
+      // Stage 3: Payment verified. PDF contract auto-generated on Cloudinary.
+      'contract_generated',
+      // Stage 4: Adopter submitted signature. Signed PDF uploaded.
+      //          Awaiting shelter to signal pet is ready for pickup.
+      'contract_signed',
+      // Stage 5a: Shelter clicked "Ready for Pickup". Adopter notified.
+      //           Pet is physically at the shelter, ready to hand over.
+      'handover_pending'
+      // → 'completed': Shelter clicked "Confirm Handover". Pet leaves building.
+      //                Pet.adoptionStatus set to 'adopted'. Rival apps auto-closed.
     ],
     default: 'pending',
     index: true
@@ -359,12 +380,107 @@ const adoptionApplicationSchema = new mongoose.Schema({
     }
   },
 
+  // ── Finalization Pipeline Sub-document ──────────────────────────────
+  // Populated once the shelter clicks "Finalize Adoption" on a
+  // meeting_completed application. All five pipeline stages are tracked here.
+  finalization: {
+    // Stage 1 ─────────────────────────────────────────────────────────
+    // Fee returned by AdoptionFeeTable.calculateFee() at Stage 1 init.
+    calculatedFee: {
+      type: Number,
+      default: null,
+    },
+    // Fee that was actually confirmed by the shelter — may differ from
+    // calculatedFee if staff used the optional override input.
+    // This is the amount the adopter is charged and printed on the contract.
+    adoptionFee: {
+      type: Number,
+      default: null,
+    },
+    // Whether staff manually overrode the calculated fee.
+    feeWasOverridden: {
+      type: Boolean,
+      default: false,
+    },
+    feeConfirmedAt: {
+      type: Date,
+      default: null,
+    },
+    // Shelter entity that confirmed the fee. Matches the ref convention
+    // used by the existing reviewedBy field.
+    feeConfirmedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Shelter',
+      default: null,
+    },
+
+    // Stage 2 ─────────────────────────────────────────────────────────
+    // Number of eSewa payment attempts made (0–3).
+    // Incremented each time a new AdoptionPayment document is created.
+    paymentAttempts: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    // ObjectId of the AdoptionPayment document that succeeded.
+    // Null until a payment reaches status='completed'.
+    paymentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AdoptionPayment',
+      default: null,
+    },
+    paymentCompletedAt: {
+      type: Date,
+      default: null,
+    },
+
+    // Stage 3 ─────────────────────────────────────────────────────────
+    // ObjectId of the AdoptionContract document generated after payment.
+    contractId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AdoptionContract',
+      default: null,
+    },
+    contractGeneratedAt: {
+      type: Date,
+      default: null,
+    },
+
+    // Stage 4 ─────────────────────────────────────────────────────────
+    contractSignedAt: {
+      type: Date,
+      default: null,
+    },
+
+    // Stage 5 ─────────────────────────────────────────────────────────
+    readyForPickupAt: {
+      type: Date,
+      default: null,
+    },
+    readyForPickupConfirmedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Shelter',
+      default: null,
+    },
+    handoverConfirmedAt: {
+      type: Date,
+      default: null,
+    },
+    handoverConfirmedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Shelter',
+      default: null,
+    },
+  },
+
   // Metadata
   reviewedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Shelter'
   },
   reviewedAt: Date,
+  // completedAt: set at Stage 5 (physical handover) by confirmHandover().
+  // NOT set at payment or signing. Matches the existing updateStatus() method.
   completedAt: Date
 
 }, {

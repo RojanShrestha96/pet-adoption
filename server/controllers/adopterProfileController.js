@@ -14,6 +14,12 @@ const TIER_2_FIELDS = [
   "existingPets",
   "landlordPermission",
   "housingTenure",
+  "idDocuments",
+  "proofOfResidence",
+  "landlordPermissionDocs",
+  "address",
+  "phone",
+  "fullName"
 ];
 
 /**
@@ -64,13 +70,20 @@ function hasNewLifeChanges(oldLifestyle, newLifestyle) {
     (c) => c !== "none" && !oldChanges.has(c)
   );
 }
-
 /**
- * Identify which Tier 2 fields changed across household + lifestyle sections.
+ * Identify which Tier 2 fields changed across personalInfo, household + lifestyle sections.
  * Returns an array of human-readable field names.
  */
-function findTier2Changes(oldProfile, newHousehold, newLifestyle) {
+function findTier2Changes(oldProfile, newPersonalInfo, newHousehold, newLifestyle) {
   const changed = [];
+
+  // Personal Info Tier 2 checks
+  if (newPersonalInfo) {
+    const oldP = oldProfile.personalInfo?.toObject?.() ?? oldProfile.personalInfo ?? {};
+    const personalChanged = detectChangedFields(oldP, newPersonalInfo);
+    const tier2Personal = personalChanged.filter((f) => TIER_2_FIELDS.includes(f));
+    changed.push(...tier2Personal);
+  }
 
   // Household Tier 2 checks
   if (newHousehold) {
@@ -218,31 +231,37 @@ export const upsertAdopterProfile = async (req, res) => {
 
     // ── Detect Tier 2 changes BEFORE merging (compare old state) ──
     let tier2Changes = [];
-    if (!isNew && (household || lifestyle)) {
-      tier2Changes = findTier2Changes(profile, household, lifestyle);
+    if (!isNew && (personalInfo || household || lifestyle)) {
+      tier2Changes = findTier2Changes(profile, personalInfo, household, lifestyle);
     }
 
     // ── Merge provided sections (deep patch, not overwrite) ──
     if (personalInfo) {
-      profile.personalInfo = { ...profile.personalInfo?.toObject?.() ?? {}, ...personalInfo };
+      if (!profile.personalInfo) profile.personalInfo = {};
+      Object.assign(profile.personalInfo, personalInfo);
       if (personalInfo.idDocuments?.length) {
         profile.personalInfo.documentsUploadedAt = new Date();
       }
+      profile.markModified("personalInfo");
     }
 
     // ── Pre-process legacy frontend field mappings ──
     if (household && Array.isArray(household.landlordPermission)) {
       household.landlordPermissionDocs = household.landlordPermission;
-      delete household.landlordPermission; // V2.1: Prevent array from overwriting legacy boolean field
+      // V2.1: Don't let the array overwrite the legacy boolean field if both are present
+      delete household.landlordPermission; 
     }
 
     if (household) {
-      profile.household = { ...profile.household?.toObject?.() ?? {}, ...household };
+      if (!profile.household) profile.household = {};
+      Object.assign(profile.household, household);
+      profile.markModified("household");
     }
 
-
     if (lifestyle) {
-      profile.lifestyle = { ...profile.lifestyle?.toObject?.() ?? {}, ...lifestyle };
+      if (!profile.lifestyle) profile.lifestyle = {};
+      Object.assign(profile.lifestyle, lifestyle);
+      profile.markModified("lifestyle");
     }
 
     // ── Auto-Geocode Address if personalInfo provided ──
@@ -268,6 +287,26 @@ export const upsertAdopterProfile = async (req, res) => {
 
     // ── Save (pre-save hook will increment profileVersion and lastUpdatedAt) ──
     await profile.save();
+
+    // ── Sync Identity changes back to main User model ──
+    if (personalInfo) {
+      const userUpdates = {};
+      if (personalInfo.fullName) userUpdates.name = personalInfo.fullName;
+      
+      if (personalInfo.phone) {
+        // Basic Nepal phone validation (10 digits)
+        const cleanPhone = personalInfo.phone.replaceAll(/\D/g, "");
+        if (cleanPhone.length === 10) {
+          userUpdates.phone = personalInfo.phone;
+        }
+      }
+      
+      if (personalInfo.address) userUpdates.address = personalInfo.address;
+
+      if (Object.keys(userUpdates).length > 0) {
+        await User.findByIdAndUpdate(adopterId, userUpdates);
+      }
+    }
 
     // ── Send Tier 2 notifications if needed ──
     let tier2Result = { notified: 0, applications: [] };

@@ -1,5 +1,6 @@
 import User from "../models/User.js";
 import Shelter from "../models/Shelter.js";
+import Admin from "../models/Admin.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { generateOTP, sendOTPEmail, verifyOTP } from "../utils/emailService.js";
@@ -29,10 +30,10 @@ export const registerAdopter = async (req, res) => {
   }
 
   // Validate password strength
-  if (password.length < 8) {
+  if (password.length < 16) {
     return res
       .status(400)
-      .json({ message: "Password must be at least 8 characters" });
+      .json({ message: "Password must be at least 16 characters" });
   }
 
   // Check if email exists in EITHER User or Shelter collection
@@ -125,10 +126,10 @@ export const registerShelter = async (req, res) => {
   }
 
   // Validate password strength
-  if (password.length < 8) {
+  if (password.length < 16) {
     return res
       .status(400)
-      .json({ message: "Password must be at least 8 characters" });
+      .json({ message: "Password must be at least 16 characters" });
   }
 
   // Check if email exists in EITHER Shelter or User collection
@@ -445,10 +446,10 @@ export const resetPassword = async (req, res) => {
     }
 
     // Validate password strength
-    if (newPassword.length < 8) {
+    if (newPassword.length < 16) {
       return res
         .status(400)
-        .json({ message: "Password must be at least 8 characters" });
+        .json({ message: "Password must be at least 16 characters" });
     }
 
     // Verify token
@@ -559,10 +560,10 @@ export const changePassword = async (req, res) => {
         .json({ message: "Current and new passwords are required" });
     }
 
-    if (newPassword.length < 8) {
+    if (newPassword.length < 16) {
       return res
         .status(400)
-        .json({ message: "New password must be at least 8 characters" });
+        .json({ message: "New password must be at least 16 characters" });
     }
 
     let user;
@@ -608,6 +609,8 @@ export const getProfile = async (req, res) => {
         .populate("favoritePets")
         .populate("adoptedPets")
         .populate("applicationsSent");
+    } else if (userType === "admin") {
+      user = await Admin.findById(userId);
     } else {
       user = await Shelter.findById(userId);
     }

@@ -42,19 +42,22 @@ function getGrade(score) {
   return { label: "Some Concerns", emoji: "🔶", color: "error" };
 }
 
-function scoreFactor({ label, score, maxScore, explanation, isFallback = false, flag = null, missingField = null, isPetDataMissing = false }) {
+function scoreFactor({ label, score, maxScore, explanation, isFallback = false, flag = null, missingField = null, isPetDataMissing = false, inputs = {}, ruleApplied = "Standard Logic", calculation = "No specific math applied" }) {
+  const boundedScore = Math.min(Math.max(Math.round(score), 0), maxScore);
   return {
     label,
-    score: Math.min(Math.max(Math.round(score), 0), maxScore),
+    score: boundedScore,
     maxScore,
-    percentage: Math.round((Math.min(Math.max(score, 0), maxScore) / maxScore) * 100),
-    explanation,
+    percentage: Math.round((boundedScore / maxScore) * 100),
+    deduction: maxScore - boundedScore,
+    inputs,
+    ruleApplied,
+    calculation,
+    reason: explanation, // Provided for AI grounding
+    explanation, // Legacy field
     isFallback,
     flag,
-    // Specific field name blocking this factor — used by UI to render locked row hint
     missingField,
-    // True only when a PET-side field is null — not the adopter's fault
-    // When true, this factor's maxScore is excluded from the scored denominator
     isPetDataMissing,
   };
 }
@@ -120,6 +123,13 @@ function scoreEnergyMatch(profile, pet) {
   const activityRaw = profile.lifestyle?.activityLevel;
   const preferenceRaw = profile.lifestyle?.preferredEnergyLevel;
 
+  const inputs = {
+    petEnergyLevel: energyLevel,
+    petEnergyScore: energyScore,
+    adopterActivityRaw: activityRaw,
+    adopterPreferenceRaw: preferenceRaw
+  };
+
   // Issue 8: Preference-first logic — use preferredEnergyLevel if activity not set
   if (!energyLevel) {
     return scoreFactor({
@@ -130,6 +140,9 @@ function scoreEnergyMatch(profile, pet) {
       isFallback: false,
       missingField: "pet.energyLevel",
       isPetDataMissing: true,
+      inputs,
+      ruleApplied: "Missing Pet Data",
+      calculation: "Score = 0 due to null pet energy level"
     });
   }
 
@@ -142,6 +155,9 @@ function scoreEnergyMatch(profile, pet) {
       explanation: `Your activity level and energy preferences haven't been entered. Complete your Lifestyle profile to see this score.`,
       isFallback: false,
       missingField: "lifestyle.activityLevel",
+      inputs,
+      ruleApplied: "Missing Adopter Data",
+      calculation: "Score = 0 due to null adopter activity and preference"
     });
   }
 
@@ -184,7 +200,15 @@ function scoreEnergyMatch(profile, pet) {
   else if (score >= 8) explanation += ` This is a reasonable match but may require a commitment to regular exercise routines.`;
   else explanation += ` There is a notable energy mismatch. A ${energyLevel === "low" ? "higher" : "lower"}-energy pet may be a better fit.`;
 
-  return scoreFactor({ label: "Energy Match", score, maxScore: 15, explanation });
+  return scoreFactor({ 
+    label: "Energy Match", 
+    score, 
+    maxScore: 15, 
+    explanation,
+    inputs: { ...inputs, normalizedActivity: activity, petEnergyNum },
+    ruleApplied: "Activity to Energy Compatibility Matrix with Preference Modifier",
+    calculation: `Base score (${base}) + Preference modifier (${prefMod}) = ${Math.max(0, Math.min(15, base + prefMod))}`
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -200,6 +224,14 @@ function scoreAloneTimeTolerance(profile, pet) {
   const workStyle = profile.lifestyle?.workStyle;
   const petCareSupport = profile.lifestyle?.petCareSupport ?? [];
 
+  const inputs = {
+    separationAnxiety: anxiety,
+    attachmentStyle: attachment,
+    maxContinuousAloneTime: maxContAlone,
+    workStyle: workStyle,
+    petCareSupport: petCareSupport
+  };
+
   const isFallback = !anxiety || (!maxContAlone && !workStyle);
 
   if (isFallback) {
@@ -210,6 +242,9 @@ function scoreAloneTimeTolerance(profile, pet) {
       explanation: `${pet.name}'s separation needs or your alone-time details haven't been fully entered. This factor is scored conservatively.`,
       isFallback: true,
       missingField: !anxiety ? "pet.behaviour.separationAnxiety" : "lifestyle.maxContinuousAloneTime",
+      inputs,
+      ruleApplied: "Missing Minimal Data",
+      calculation: "Conservative fallback score of 8"
     });
   }
 
@@ -233,6 +268,9 @@ function scoreAloneTimeTolerance(profile, pet) {
       maxScore: 15,
       explanation: `${pet.name} is comfortable being alone for up to ${indepTol} hours. Your schedule means up to ~${effectiveHours.toFixed(0)} hours alone.`,
       flag,
+      inputs: { ...inputs, effectiveHours, independenceTolerance: indepTol, overshoot },
+      ruleApplied: "Hard Threshold Independence Tolerance Penalty",
+      calculation: `Overshoot (${overshoot}) * 2.5 penalty = -${penalty} pts -> Max(0, 15 - ${penalty}) = ${score}`
     });
   }
 
@@ -252,6 +290,7 @@ function scoreAloneTimeTolerance(profile, pet) {
   }
 
   let score = getBase(anxiety, effectiveHours);
+  const baseScore = score;
 
   if (attachment === "independent") score = Math.min(15, score + 2);
   const velcroFlag =
@@ -268,7 +307,16 @@ function scoreAloneTimeTolerance(profile, pet) {
   else if (score >= 7) explanation += ` This is manageable but requires consistent routine and enrichment.`;
   else explanation += ` This is a high-risk mismatch for alone time. Discuss mitigation strategies with the shelter.`;
 
-  return scoreFactor({ label: "Alone-Time Tolerance", score, maxScore: 15, explanation, flag: velcroFlag });
+  return scoreFactor({ 
+    label: "Alone-Time Tolerance", 
+    score, 
+    maxScore: 15, 
+    explanation, 
+    flag: velcroFlag,
+    inputs: { ...inputs, effectiveHours, rawHours, supportOffset, attachment },
+    ruleApplied: "Anxiety Matrix vs Effective Hours + Attachment Modifier",
+    calculation: `Base score (${baseScore}) from bracket [anxiety:${anxiety}, hours:${effectiveHours}] + Attachment modifier (${attachment === 'independent' ? '+2' : '0'}) = ${score}`
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -288,6 +336,16 @@ function scoreSpaceEnvironment(profile, pet) {
   const landlordPermission = profile.household?.housing?.landlordPermission ?? profile.household?.landlordPermission;
   const needsLandlordPermission = housingType === "rent" && landlordPermission === false;
 
+  const inputs = {
+    petIdealEnv: idealEnv,
+    petMinSqm: minSqm,
+    adopterHomeType: homeType,
+    adopterHasFencedYard: hasFencedYard,
+    adopterLivingSqm: livingSqm,
+    adopterHousingType: housingType,
+    adopterLandlordPermission: landlordPermission
+  };
+
   if (needsLandlordPermission) {
     return scoreFactor({
       label: "Space & Environment",
@@ -295,6 +353,9 @@ function scoreSpaceEnvironment(profile, pet) {
       maxScore: 10,
       explanation: `You are renting without landlord permission to keep a pet. This is a hard blocker — please obtain written permission before submitting an application.`,
       flag: `Renting Without Landlord Permission — this is a high-severity concern. Unapproved pets can lead to lease violations and forced rehoming.`,
+      inputs,
+      ruleApplied: "Hard Blocker: No Landlord Permission",
+      calculation: "Score = 0 automatically applied"
     });
   }
 
@@ -309,6 +370,9 @@ function scoreSpaceEnvironment(profile, pet) {
       explanation: `Your home type hasn't been entered. Complete your Household profile to see this score.`,
       isFallback: false,
       missingField: "household.homeType",
+      inputs,
+      ruleApplied: "Missing Adopter Data",
+      calculation: "Score = 0 due to null homeType"
     });
   }
 
@@ -320,6 +384,9 @@ function scoreSpaceEnvironment(profile, pet) {
       explanation: `${pet.name}'s ideal environment hasn't been entered by the shelter. This factor will be scored once the shelter completes the pet's profile.`,
       isFallback: true,
       isPetDataMissing: true,
+      inputs,
+      ruleApplied: "Missing Pet Data",
+      calculation: "Score = 0 due to null idealEnvironment"
     });
   }
 
@@ -334,6 +401,9 @@ function scoreSpaceEnvironment(profile, pet) {
       maxScore: 10,
       explanation: `Environment match based on basic apartment-friendly data (detailed assessment not yet entered by shelter).`,
       isFallback: true,
+      inputs: { ...inputs, apartmentFriendly: pet.compatibility?.apartmentFriendly },
+      ruleApplied: "Legacy Apartment-Friendly Fallback",
+      calculation: `Fallback boolean logic applied = ${legacyScore}`
     });
   }
 
@@ -349,13 +419,15 @@ function scoreSpaceEnvironment(profile, pet) {
 
   const envRow = envMatrix[idealEnv] ?? {};
   let envScore = envRow[homeType] ?? envRow.default ?? 5;
+  const baseScore = envScore;
 
   let spaceNote = "";
+  let spacePenalty = 0;
   if (minSqm > 0 && typeof livingSqm === "number") {
     if (livingSqm < minSqm) {
       // Issue 11: Proportional penalty — not capped at an arbitrary 3 points
       const ratio = livingSqm / minSqm;
-      const spacePenalty = Math.round((1 - ratio) * envScore);
+      spacePenalty = Math.round((1 - ratio) * envScore);
       envScore = Math.max(0, envScore - spacePenalty);
       spaceNote = ` Your living space (${livingSqm} sqm) is below ${pet.name}'s recommended minimum of ${minSqm} sqm — a ${Math.round((1 - ratio) * 100)}% shortfall.`;
     } else {
@@ -368,7 +440,11 @@ function scoreSpaceEnvironment(profile, pet) {
       ? `${pet.name} is a vocal pet. Apartment living may cause noise concerns with neighbours. We recommend confirming this with your building management before applying.`
       : null;
 
-  if (vocalFlag) envScore = Math.max(0, envScore - 2);
+  let vocalPenalty = 0;
+  if (vocalFlag) {
+    vocalPenalty = 2;
+    envScore = Math.max(0, envScore - vocalPenalty);
+  }
 
   const envLabel = {
     "indoor-only": "indoor-only environment",
@@ -386,7 +462,16 @@ function scoreSpaceEnvironment(profile, pet) {
   explanation += envScore >= 8 ? ` is a great match.` : envScore >= 5 ? ` is an adequate fit.` : ` may not fully meet ${pet.name}'s environment needs.`;
   explanation += spaceNote;
 
-  return scoreFactor({ label: "Space & Environment", score: envScore, maxScore: 10, explanation, flag: vocalFlag });
+  return scoreFactor({ 
+    label: "Space & Environment", 
+    score: envScore, 
+    maxScore: 10, 
+    explanation, 
+    flag: vocalFlag,
+    inputs: { ...inputs, baseScore, spacePenalty, vocalPenalty },
+    ruleApplied: "Environment Matrix vs Home Type + Space Proportional Penalty",
+    calculation: `Base (${baseScore}) - Space Penalty (${spacePenalty}) - Vocal Penalty (${vocalPenalty}) = ${envScore}`
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -401,6 +486,13 @@ function scoreChildrenCompat(profile, pet) {
   const childrenAges = profile.household?.childrenAges ?? [];
   const legacyAgeRange = profile.household?.childrenAgeRange;
 
+  const inputs = {
+    petGoodWithKids: goodWithKids,
+    adopterHasChildren: hasChildren,
+    adopterChildrenAges: childrenAges,
+    adopterLegacyAgeRange: legacyAgeRange
+  };
+
   // Issue 10: score=0 when we can't determine children status at all
   if (goodWithKids === undefined && hasChildren === undefined) {
     // Both sides missing — exclude from denominator
@@ -412,6 +504,9 @@ function scoreChildrenCompat(profile, pet) {
       isFallback: false,
       missingField: "pet.compatibility.goodWithKids",
       isPetDataMissing: true,
+      inputs,
+      ruleApplied: "Missing Both Data",
+      calculation: "Score = 0"
     });
   }
   if (goodWithKids === undefined) {
@@ -424,6 +519,9 @@ function scoreChildrenCompat(profile, pet) {
       isFallback: false,
       missingField: "pet.compatibility.goodWithKids",
       isPetDataMissing: true,
+      inputs,
+      ruleApplied: "Missing Pet Data",
+      calculation: "Score = 0"
     });
   }
   if (hasChildren === undefined) {
@@ -435,6 +533,9 @@ function scoreChildrenCompat(profile, pet) {
       explanation: `Your household children information is incomplete. Complete your Household profile to see this score.`,
       isFallback: false,
       missingField: "household.hasChildren",
+      inputs,
+      ruleApplied: "Missing Adopter Data",
+      calculation: "Score = 0"
     });
   }
 
@@ -448,6 +549,9 @@ function scoreChildrenCompat(profile, pet) {
       score: 15,
       maxScore: 15,
       explanation: `No children in the home — no children compatibility concerns.`,
+      inputs,
+      ruleApplied: "No Children Present",
+      calculation: "Score = 15 automatic pass"
     });
   }
 
@@ -457,6 +561,9 @@ function scoreChildrenCompat(profile, pet) {
       score: 15,
       maxScore: 15,
       explanation: `${pet.name} is great with children — a wonderful match for your family.`,
+      inputs,
+      ruleApplied: "KidsFlag: yes",
+      calculation: "Score = 15 automatic pass"
     });
   }
 
@@ -467,6 +574,9 @@ function scoreChildrenCompat(profile, pet) {
       maxScore: 15,
       explanation: `${pet.name} is not recommended in homes with children. Please discuss this seriously with the shelter.`,
       flag: `${pet.name} has been assessed as not suitable for homes with children. This is a significant concern.`,
+      inputs,
+      ruleApplied: "KidsFlag: no",
+      calculation: "Score = 0 automatic fail"
     });
   }
 
@@ -480,6 +590,9 @@ function scoreChildrenCompat(profile, pet) {
         maxScore: 15,
         explanation: `${pet.name} requires supervision around children. You have children in the home but have not specified their ages. For safety, this is scored as high risk until age information is provided.`,
         flag: `Unknown child ages treated as high risk. Please update your household profile with children's age ranges.`,
+        inputs,
+        ruleApplied: "Unknown Children Ages under Supervision Rule",
+        calculation: "Score = 0 fail open safety guard"
       });
     }
 
@@ -521,10 +634,22 @@ function scoreChildrenCompat(profile, pet) {
       maxScore: 15,
       explanation: `${pet.name} can live with children but requires supervision — ${lowestNote}. Discuss safety routines with the shelter at the meet & greet.`,
       flag,
+      inputs: { ...inputs, hasInfant, evalAgeStrategy: childrenAges.length ? 'new' : 'legacy' },
+      ruleApplied: "Supervision Needed vs Youngest Child Age",
+      calculation: `Highest risk age score = ${lowestScore}`
     });
   }
 
-  return scoreFactor({ label: "Children Compatibility", score: 0, maxScore: 15, explanation: "Assessed conservatively — missing data.", isFallback: false });
+  return scoreFactor({ 
+    label: "Children Compatibility", 
+    score: 0, 
+    maxScore: 15, 
+    explanation: "Assessed conservatively — missing data.", 
+    isFallback: false,
+    inputs,
+    ruleApplied: "Missing Supervision Classification",
+    calculation: "Score = 0 conservative fallback"
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -543,6 +668,14 @@ function scoreExistingPetCompat(profile, pet) {
   const hasPets = hasDogs || hasCats || hasSmallAnimals
     || profile.household?.hasExistingPets === true;
 
+  const inputs = {
+    petGoodWithPets: goodWithPets,
+    adopterHasDogs: hasDogs,
+    adopterHasCats: hasCats,
+    adopterHasSmallAnimals: hasSmallAnimals,
+    adopterHasPetsOverall: hasPets
+  };
+
   if (goodWithPets === undefined) {
     return scoreFactor({
       label: "Existing Pet Compatibility",
@@ -552,6 +685,9 @@ function scoreExistingPetCompat(profile, pet) {
       isFallback: false,
       missingField: "pet.compatibility.goodWithPets",
       isPetDataMissing: true,
+      inputs,
+      ruleApplied: "Missing Pet Data",
+      calculation: "Score = 0"
     });
   }
 
@@ -565,6 +701,9 @@ function scoreExistingPetCompat(profile, pet) {
       score: 10,
       maxScore: 10,
       explanation: `No existing pets in the home — no inter-pet compatibility concerns.`,
+      inputs,
+      ruleApplied: "No Pets Present",
+      calculation: "Score = 10 automatic pass"
     });
   }
 
@@ -574,6 +713,9 @@ function scoreExistingPetCompat(profile, pet) {
       score: 10,
       maxScore: 10,
       explanation: `${pet.name} gets along well with other animals.`,
+      inputs,
+      ruleApplied: "Pet Good With Pets: yes",
+      calculation: "Score = 10 automatic pass"
     });
   }
 
@@ -584,6 +726,9 @@ function scoreExistingPetCompat(profile, pet) {
       maxScore: 10,
       explanation: `${pet.name} does not do well with other animals in the home. Careful consideration and shelter guidance is needed.`,
       flag: `${pet.name} has been assessed as not suitable for homes with other animals. This is a significant concern.`,
+      inputs,
+      ruleApplied: "Pet Good With Pets: no",
+      calculation: "Score = 0 automatic fail"
     });
   }
 
@@ -596,6 +741,9 @@ function scoreExistingPetCompat(profile, pet) {
         maxScore: 10,
         explanation: `${pet.name} does best with cats only. Your household has dogs — careful introductions and shelter guidance are essential.`,
         flag: `${pet.name} is noted as getting along with cats but not dogs. Your existing dog(s) may be a concern.`,
+        inputs,
+        ruleApplied: "Cats-Only Pet vs Adopter Dog",
+        calculation: "Score = 3 explicit clash"
       });
     }
     return scoreFactor({
@@ -603,6 +751,9 @@ function scoreExistingPetCompat(profile, pet) {
       score: 10,
       maxScore: 10,
       explanation: `${pet.name} is fine with cats, which matches your household.`,
+      inputs,
+      ruleApplied: "Cats-Only Pet vs Adopter No Dogs",
+      calculation: "Score = 10 match"
     });
   }
 
@@ -615,6 +766,9 @@ function scoreExistingPetCompat(profile, pet) {
         maxScore: 10,
         explanation: `${pet.name} does best with dogs only. Your household has cats — careful introductions and shelter guidance are essential.`,
         flag: `${pet.name} is noted as getting along with dogs but not cats. Your existing cat(s) may be a concern.`,
+        inputs,
+        ruleApplied: "Dogs-Only Pet vs Adopter Cat",
+        calculation: "Score = 3 explicit clash"
       });
     }
     return scoreFactor({
@@ -622,10 +776,21 @@ function scoreExistingPetCompat(profile, pet) {
       score: 10,
       maxScore: 10,
       explanation: `${pet.name} is fine with dogs, which matches your household.`,
+      inputs,
+      ruleApplied: "Dogs-Only Pet vs Adopter No Cats",
+      calculation: "Score = 10 match"
     });
   }
 
-  return scoreFactor({ label: "Existing Pet Compatibility", score: 7, maxScore: 10, explanation: "Assessed conservatively." });
+  return scoreFactor({ 
+    label: "Existing Pet Compatibility", 
+    score: 7, 
+    maxScore: 10, 
+    explanation: "Assessed conservatively.",
+    inputs,
+    ruleApplied: "Fallback Compatibility",
+    calculation: "Score = 7 cautious estimate"
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -639,6 +804,13 @@ function scoreExperienceTraining(profile, pet) {
   const experienceRaw = profile.lifestyle?.experienceLevel;
   const experience = normaliseExperience(experienceRaw);
 
+  const inputs = {
+    petTrainingDifficulty: trainingDifficulty,
+    petHealthStatus: healthStatus,
+    adopterExperienceRaw: experienceRaw,
+    adopterExperience: experience
+  };
+
   if (!experience) {
     return scoreFactor({
       label: "Experience & Training Match",
@@ -647,6 +819,9 @@ function scoreExperienceTraining(profile, pet) {
       explanation: `Your experience level hasn't been entered. Complete your Lifestyle profile to see this score.`,
       isFallback: false,
       missingField: "lifestyle.experienceLevel",
+      inputs,
+      ruleApplied: "Missing Adopter Data",
+      calculation: "Score = 0"
     });
   }
 
@@ -654,13 +829,21 @@ function scoreExperienceTraining(profile, pet) {
   if (!trainingDifficulty) {
     const isSpecial = healthStatus === "special-needs" || healthStatus === "treatment";
     let score = experience === "experienced" ? 12 : experience === "some-experience" ? 10 : 7;
-    if (isSpecial && experience === "first-time") score = Math.max(3, score - 3);
+    const baseFallback = score;
+    let penalty = 0;
+    if (isSpecial && experience === "first-time") {
+      penalty = score - Math.max(3, score - 3);
+      score = Math.max(3, score - 3);
+    }
     return scoreFactor({
       label: "Experience & Training Match",
       score,
       maxScore: 15,
       explanation: `${pet.name}'s individual training difficulty hasn't been assessed by the shelter yet — ask them about it. Score is a cautious estimate based on your experience and health status only.`,
       isFallback: true,
+      inputs: { ...inputs, isSpecial, baseFallback, penalty },
+      ruleApplied: "Missing Pet Data Fallback (Experience Only)",
+      calculation: `Fallback base (${baseFallback}) - Special Needs Penalty (${penalty}) = ${score}`
     });
   }
 
@@ -672,11 +855,14 @@ function scoreExperienceTraining(profile, pet) {
   };
 
   let score = matrix[trainingDifficulty]?.[experience] ?? 9;
+  const baseScore = score;
 
   // Health status modifier for first-time adopters
   const isSpecialNeeds = healthStatus === "special-needs" || healthStatus === "treatment" || healthStatus === "chronic-condition";
+  let healthPenalty = 0;
   if (isSpecialNeeds && experience === "first-time") {
-    score = Math.max(0, score - 3);
+    healthPenalty = 3;
+    score = Math.max(0, score - healthPenalty);
   }
 
   const challengeFlag =
@@ -693,7 +879,16 @@ function scoreExperienceTraining(profile, pet) {
   else if (score >= 8) explanation += ` This is manageable with commitment and support from the shelter.`;
   else explanation += ` This combination may be demanding. Consider discussing a dedicated support plan with the shelter.`;
 
-  return scoreFactor({ label: "Experience & Training Match", score, maxScore: 15, explanation, flag: challengeFlag });
+  return scoreFactor({ 
+    label: "Experience & Training Match", 
+    score, 
+    maxScore: 15, 
+    explanation, 
+    flag: challengeFlag,
+    inputs: { ...inputs, isSpecialNeeds, baseScore, healthPenalty, challengeFlag },
+    ruleApplied: "Training Difficulty vs Experience Matrix + Health Modifier",
+    calculation: `Base score (${baseScore}) - Health penalty (${healthPenalty}) = ${score}`
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -714,6 +909,15 @@ function scoreBudgetCommitment(profile, pet) {
   const annualVax = profile.household?.annualVaccinations;
   const safeEnv = profile.household?.safeEnvironment;
 
+  const inputs = {
+    petHealthStatus: healthStatus,
+    petIsSpecialNeeds: isSpecialNeeds,
+    petEstimatedCost: estimatedCost,
+    adopterBudgetTier: budgetTier,
+    adopterAnnualVax: annualVax,
+    adopterSafeEnv: safeEnv
+  };
+
   // Issue 2: Hard block — if pet has a cost and adopter has no budget, score 0
   if (estimatedCost > 0 && !budgetTier) {
     return scoreFactor({
@@ -724,17 +928,21 @@ function scoreBudgetCommitment(profile, pet) {
       isFallback: false,
       flag: `Budget information is required for pets with a known monthly cost. Please update your Lifestyle & Preferences profile.`,
       missingField: "lifestyle.monthlyPetBudget",
+      inputs,
+      ruleApplied: "Hard Blocker: Cost Without Budget",
+      calculation: "Score = 0 automatically applied"
     });
   }
 
   let budgetScore = 6;
   let budgetFlag = null;
 
+  let ratio = null;
   if (budgetTier && estimatedCost > 0) {
     // Issue 1: Use NPR-aligned getBudgetMax map
     const adopterBudgetMax = getBudgetMax(budgetTier);
     if (adopterBudgetMax !== null) {
-      const ratio = estimatedCost / adopterBudgetMax;
+      ratio = estimatedCost / adopterBudgetMax;
       if (ratio <= 1)        { budgetScore = 6; }
       else if (ratio <= 1.3) { budgetScore = 4; }
       else if (ratio <= 1.6) {
@@ -773,7 +981,17 @@ function scoreBudgetCommitment(profile, pet) {
   if (annualVax === true) explanation += ` Your commitment to annual vaccinations is noted.`;
   if (safeEnv === true) explanation += ` Your commitment to a safe home environment is noted.`;
 
-  return scoreFactor({ label: "Budget & Commitment", score: totalScore, maxScore: 10, explanation, isFallback: !budgetTier, flag: budgetFlag });
+  return scoreFactor({ 
+    label: "Budget & Commitment", 
+    score: totalScore, 
+    maxScore: 10, 
+    explanation, 
+    isFallback: !budgetTier, 
+    flag: budgetFlag,
+    inputs: { ...inputs, costToBudgetRatio: ratio, budgetScore, vaxScore, safeScore },
+    ruleApplied: "Cost/Budget Ratio Extractor + Commitment Modifiers",
+    calculation: `Budget(${budgetScore}) + Vax(${vaxScore}) + Safe(${safeScore}) (capped at 10) = ${totalScore}`
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -790,31 +1008,47 @@ function scoreLifeStability(profile, pet) {
   const housingTenure = profile.household?.housingTenure; // kept for legacy records
   const isMoving = upcomingChanges.includes("moving-home");
 
+  const inputs = {
+    adopterUpcomingChanges: upcomingChanges,
+    adopterHousingType: housingType,
+    adopterLandlordPermission: landlordPermission,
+    adopterHousingTenure: housingTenure,
+    adopterIsMoving: isMoving
+  };
+
   let tenureScore;
   let tenureFlag = null;
+  let tenureRule = "Unknown Housing Status Fallback";
 
   // V2.1: Derive tenure score from new housing fields first
   if (housingType === "own") {
     tenureScore = 5;
+    tenureRule = "Homeowner Base Score";
   } else if (housingType === "rent") {
     if (landlordPermission === true) {
       tenureScore = isMoving ? 2 : 4;
+      tenureRule = "Renter with Permission Base Score (Moving modifier applied)";
       if (isMoving) tenureFlag = `Your current landlord permission is confirmed, but you've indicated you're planning to move. You'll need to obtain permission at your new address.`;
     } else if (landlordPermission === false) {
       tenureScore = 1;
+      tenureRule = "Renter without Permission Penalty Base Score";
       tenureFlag = `You are renting without confirmed landlord permission to keep a pet. Please obtain written permission before applying — unapproved pets can lead to lease violations.`;
     } else {
       tenureScore = 3; // unknown permission
+      tenureRule = "Renter with Unknown Permission Base Score";
     }
   } else if (housingType === "live-with-family") {
     tenureScore = isMoving ? 2 : 4; // Treated as stable unless moving
+    tenureRule = "Living with Family Base Score";
   } else if (housingTenure) {
     // Legacy fallback
     const tenureScoreMap = { owner: 5, "renter-with-permission": 4, "renter-no-confirmation": 2, "lives-with-family": 3 };
     tenureScore = tenureScoreMap[housingTenure] ?? 3;
+    tenureRule = "Legacy Tenure Map Base Score";
     if (housingTenure === "renter-no-confirmation") tenureFlag = `You are renting without confirmed landlord permission. Please obtain written permission before applying.`;
   } else {
     tenureScore = 3;
+    tenureRule = "Missing Housing Data Base Score";
   }
 
   // Bug 4 fix: graduated penalties by change type (was flat +2 for all)
@@ -854,7 +1088,16 @@ function scoreLifeStability(profile, pet) {
   const explanation = `Your life stability has been assessed based on your housing situation and upcoming plans.${tenureNote}${changeNote}`;
   const flag = changeFlag ?? tenureFlag;
 
-  return scoreFactor({ label: "Life Stability", score: totalScore, maxScore: 10, explanation, flag });
+  return scoreFactor({ 
+    label: "Life Stability", 
+    score: totalScore, 
+    maxScore: 10, 
+    explanation, 
+    flag,
+    inputs: { ...inputs, changePenalty, tenureScore, changeScore },
+    ruleApplied: `Housing Tenure (${tenureRule}) + Lifecycle Event Risk Map`,
+    calculation: `Tenure(${tenureScore}) + (5 - ChangeRisk(${changePenalty})) = ${totalScore} (min 1)`
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -925,17 +1168,24 @@ export function deriveConfidenceLevel(profile) {
   if (!profile) return "low";
   const ls = profile.lifestyle ?? {};
   const hh = profile.household ?? {};
+
   const required = [
     ls.workStyle,
     ls.maxContinuousAloneTime,
     ls.monthlyPetBudget,
-    hh.livingSize,
-    hh.hasExistingPets,
+    // Support either descriptive livingSize OR numeric livingSizeSqm
+    hh.livingSize || (hh.livingSizeSqm !== undefined && hh.livingSizeSqm !== null && hh.livingSizeSqm > 0) ? "valid" : "",
+    hh.hasExistingPets !== undefined && hh.hasExistingPets !== null ? "valid" : "",
     ls.activityLevel,
     ls.experienceLevel,
-    ls.upcomingLifeChanges,
   ];
-  return required.every(v => v !== null && v !== undefined && v !== "") ? "high" : "low";
+
+  // Logic: 7 core mandatory fields + the 8th which is a valid living size
+  const coresPresent = required.every(v => v !== null && v !== undefined && v !== "");
+  
+  // High confidence also requires that a profile snapshot effectively has data, 
+  // but we don't block on upcomingLifeChanges since it represents a "No" by being empty.
+  return coresPresent ? "high" : "low";
 }
 
 export const calculateCompatibility = (profile, pet) => {
@@ -993,11 +1243,13 @@ export const calculateCompatibility = (profile, pet) => {
   const coreFields = [
     safeProfile.lifestyle?.activityLevel,
     safeProfile.lifestyle?.workStyle,
-    safeProfile.household?.housing?.type ?? safeProfile.household?.rentOwn,
-    safeProfile.household?.hasChildren,
+    safeProfile.lifestyle?.maxContinuousAloneTime,
     safeProfile.lifestyle?.monthlyPetBudget,
+    safeProfile.lifestyle?.experienceLevel,
+    safeProfile.household?.livingSize || safeProfile.household?.livingSizeSqm,
+    safeProfile.household?.hasExistingPets !== undefined,
   ];
-  const confidence = coreFields.filter(Boolean).length / coreFields.length;
+  const confidence = coreFields.filter(v => v !== null && v !== undefined && v !== "").length / coreFields.length;
 
   return {
     petId: pet._id?.toString() || pet.id,

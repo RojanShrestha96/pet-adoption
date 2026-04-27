@@ -48,8 +48,8 @@ const shelterSchema = new mongoose.Schema(
     // GeoJSON Point — required for $geoNear / 2dsphere queries.
     // coordinates order: [longitude, latitude] (GeoJSON standard)
     location: {
-      type: { type: String, enum: ['Point'], default: 'Point' },
-      coordinates: { type: [Number], default: undefined }, // [lng, lat]
+      type: { type: String, enum: ['Point'] },
+      coordinates: { type: [Number] }, // [lng, lat]
       formattedAddress: { type: String, trim: true }
     },
     documentation: [{

@@ -3,6 +3,8 @@ import Shelter from "../models/Shelter.js";
 import Pet from "../models/Pet.js";
 import Donation from "../models/Donation.js";
 import AdoptionApplication from "../models/AdoptionApplication.js";
+import AuditLog from "../models/AuditLog.js";
+import { logAdminAction } from "../utils/auditLogger.js";
 
 // GET DASHBOARD OVERVIEW STATS (enhanced)
 export const getDashboardStats = async (req, res) => {
@@ -143,6 +145,14 @@ export const updateShelterStatus = async (req, res) => {
       return res.status(404).json({ message: "Shelter not found" });
     }
 
+    await logAdminAction(
+      req.user.userId,
+      "VERIFY_SHELTER",
+      `Shelter: ${shelter.name}`,
+      `Shelter verification status changed to: ${isVerified}`,
+      isVerified ? "success" : "warning"
+    );
+
     res.status(200).json({ message: "Shelter status updated", shelter });
   } catch (error) {
     console.error("Update shelter status error:", error);
@@ -168,6 +178,14 @@ export const suspendShelter = async (req, res) => {
     if (!shelter) {
       return res.status(404).json({ message: "Shelter not found" });
     }
+
+    await logAdminAction(
+      req.user.userId,
+      "SUSPEND_SHELTER",
+      `Shelter: ${shelter.name}`,
+      isSuspended ? `Suspended shelter` : `Reinstated shelter`,
+      isSuspended ? "danger" : "success"
+    );
 
     res.status(200).json({
       message: isSuspended ? "Shelter suspended" : "Shelter reinstated",
@@ -256,6 +274,14 @@ export const updateShelterAdminNotes = async (req, res) => {
     if (!shelter) {
       return res.status(404).json({ message: "Shelter not found" });
     }
+
+    await logAdminAction(
+      req.user.userId,
+      "UPDATE_SHELTER_NOTES",
+      `Shelter: ${shelter.name}`,
+      "Updated internal admin notes",
+      "info"
+    );
 
     res.status(200).json({ message: "Admin notes saved", shelter });
   } catch (error) {
@@ -403,6 +429,14 @@ export const updateUserStatus = async (req, res) => {
     if (!updatedUser) {
       return res.status(404).json({ message: "User not found" });
     }
+
+    await logAdminAction(
+      req.user.userId || req.user.id,
+      "UPDATE_USER_STATUS",
+      `User: ${updatedUser.name}`,
+      `Changed status to ${status.toUpperCase()}${statusReason ? ` - Reason: ${statusReason}` : ''}`,
+      status === "banned" ? "danger" : status === "warned" ? "warning" : "info"
+    );
 
     res.status(200).json({ 
       message: `User account has been marked as ${status}.`,
@@ -572,5 +606,16 @@ export const exportDonationsCsv = async (req, res) => {
   } catch (error) {
     console.error("Export donations CSV error:", error);
     res.status(500).json({ message: "Server error exporting donations" });
+  }
+};
+
+// GET AUDIT LOGS
+export const getAuditLogs = async (req, res) => {
+  try {
+    const logs = await AuditLog.find().sort({ createdAt: -1 }).limit(100);
+    res.status(200).json(logs);
+  } catch (error) {
+    console.error("Get audit logs error:", error);
+    res.status(500).json({ message: "Server error fetching audit logs" });
   }
 };

@@ -17,8 +17,8 @@ const petSchema = new mongoose.Schema({
     trim: true
   },
   age: {
-    type: String,
-    required: true
+    years: { type: Number, default: 0, min: 0 },
+    months: { type: Number, default: 0, min: 0, max: 11 }
   },
   gender: {
     type: String,
@@ -41,6 +41,17 @@ const petSchema = new mongoose.Schema({
   medical: {
     isVaccinated: { type: Boolean, default: false },
     vaccinationDate: Date,
+    vaccinations: [{
+      name: { type: String, required: true },
+      dateAdministered: { type: Date, required: true },
+      nextDueDate: Date,
+      administeredBy: String
+    }],
+    vaccinationStatus: {
+      type: String,
+      enum: ['fully-vaccinated', 'partially-vaccinated', 'not-vaccinated', 'unknown'],
+      default: 'unknown'
+    },
     isMicrochipped: { type: Boolean, default: false },
     microchipId: String,
     isNeutered: { type: Boolean, default: false },
