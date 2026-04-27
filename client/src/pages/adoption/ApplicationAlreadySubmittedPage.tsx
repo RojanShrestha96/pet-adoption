@@ -11,6 +11,7 @@ import {
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { mockPets } from "../../data/mockData";
+import { formatAge } from "../../utils/ageUtils";
 export function ApplicationAlreadySubmittedPage() {
   const navigate = useNavigate();
   const { petId } = useParams();
@@ -137,7 +138,7 @@ export function ApplicationAlreadySubmittedPage() {
                     color: "var(--color-text-light)",
                   }}
                 >
-                  {pet.breed} • {pet.age} • {pet.location}
+                  {pet.breed} • {formatAge(pet.age)} • {pet.location}
                 </p>
                 <div
                   className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium"

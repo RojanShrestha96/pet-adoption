@@ -22,7 +22,7 @@ import { mockPets } from "../../data/mockData";
 import axios from "axios";
 import { successStories } from "../../data/successStories";
 import { useAuth } from "../../contexts/AuthContext";
-
+import { formatAge } from "../../utils/ageUtils";
 
 
 export function HomePage() {
@@ -34,6 +34,8 @@ export function HomePage() {
   const [shelters, setShelters] = useState<any[]>([]);
   const [loadingShelters, setLoadingShelters] = useState(true);
   const [loadingPets, setLoadingPets] = useState(true);
+  const [loadingStories, setLoadingStories] = useState(true);
+  const [dynamicStories, setDynamicStories] = useState<any[]>([]);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
 
   const fetchData = async (location?: {lat: number, lng: number}) => {
@@ -56,6 +58,15 @@ export function HomePage() {
       }
       const sheltersRes = await axios.get(shelterUrl);
       setShelters(sheltersRes.data);
+
+      // Fetch stories
+      try {
+        const storiesRes = await axios.get("http://localhost:5000/api/stories?featured=true");
+        setDynamicStories(storiesRes.data);
+      } catch (e) {
+        console.error("No real stories found yet.");
+        setDynamicStories([]);
+      }
     } catch (err) {
       console.error("Failed to fetch data", err);
       // Fallback to mock data if fetch fails
@@ -63,6 +74,7 @@ export function HomePage() {
     } finally {
       setLoadingShelters(false);
       setLoadingPets(false);
+      setLoadingStories(false);
     }
   };
 
@@ -433,7 +445,7 @@ export function HomePage() {
                          </div>
                          <div className="flex flex-row sm:flex-col items-end gap-3 shrink-0">
                            <div className="bg-white/20 backdrop-blur-md px-4 py-2 rounded-full text-white font-medium text-sm border border-white/20 shadow-sm">
-                             {featuredPets[0].age}
+                             {formatAge(featuredPets[0].age)}
                            </div>
                            <div className="bg-green-500/80 backdrop-blur-md px-4 py-2 rounded-full text-white font-medium text-sm border border-green-400/30 shadow-sm">
                              Vaccinated
@@ -496,92 +508,47 @@ export function HomePage() {
 
       <PawAdoptSection />
 
-      {/* Success Stories Section — Premium Carousel */}
-      <section
-        className="pt-8 pb-20 overflow-hidden"
-        style={{ background: "var(--color-background)" }}
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-50px" }}
-            variants={{
-              hidden: {},
-              visible: {
-                transition: {
-                  staggerChildren: 0.15,
-                },
-              },
-            }}
-            className="text-center mb-14"
-          >
+          {loadingStories ? (
+            <div className="flex justify-center py-10">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[var(--color-primary)]"></div>
+            </div>
+          ) : dynamicStories.length > 0 ? (
+            <SuccessStoriesCarousel stories={dynamicStories} />
+          ) : (
+            <div className="text-center py-16 bg-[var(--color-surface)] rounded-3xl border border-dashed border-[var(--color-border)]">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[var(--color-primary)]/10 mb-4">
+                <Heart className="w-8 h-8 text-[var(--color-primary)]" />
+              </div>
+              <h3 className="text-xl font-bold mb-2">Be Our Next Success Story!</h3>
+              <p className="text-[var(--color-text-light)] max-w-md mx-auto">
+                No real-world adoptions have been shared yet. Start your journey today and help us write the first chapter.
+              </p>
+              <div className="mt-6">
+                <Button variant="primary" onClick={() => navigate("/search")}>
+                  Find a Pet
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {dynamicStories.length > 0 && (
             <motion.div
-              variants={{
-                hidden: { opacity: 0, scale: 0.8 },
-                visible: { opacity: 1, scale: 1, transition: { type: "spring", stiffness: 200 } }
-              }}
-              className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold mb-6 shadow-sm ring-1 ring-black/5"
-              style={{
-                background: "var(--color-surface)",
-                color: "var(--color-primary)",
-              }}
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ once: true }}
+              className="text-center mt-12"
             >
-              <Heart className="w-4 h-4" />
-              Happy Tails
+              <Link to="/success-stories">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  icon={<ArrowRight className="w-5 h-5" />}
+                >
+                  Read More Stories
+                </Button>
+              </Link>
             </motion.div>
-            
-            <motion.h2
-              variants={{
-                hidden: { opacity: 0, x: -30 },
-                visible: { opacity: 1, x: 0, transition: { duration: 0.7, ease: "easeOut" } }
-              }}
-              className="text-4xl md:text-5xl font-extrabold mb-5 tracking-tight leading-tight"
-              style={{ color: "var(--color-text)" }}
-            >
-              Real Stories, <span className="text-[var(--color-primary)] relative inline-block">
-                Real Homes
-                <motion.span 
-                  initial={{ width: 0 }}
-                  whileInView={{ width: "100%" }}
-                  transition={{ duration: 0.8, delay: 0.5, ease: "easeInOut" }}
-                  className="absolute -bottom-1 left-0 h-2 bg-[var(--color-primary)] opacity-20 rounded-full"
-                />
-              </span>
-            </motion.h2>
-
-            <motion.p
-              variants={{
-                hidden: { opacity: 0, y: 15 },
-                visible: { opacity: 1, y: 0, transition: { duration: 0.6 } }
-              }}
-              className="text-lg md:text-xl font-medium leading-relaxed opacity-90 max-w-2xl mx-auto"
-              style={{ color: "var(--color-text-light)" }}
-            >
-              Heartwarming tales of second chances and the beautiful bonds that transformed lives forever.
-            </motion.p>
-          </motion.div>
-
-          <SuccessStoriesCarousel stories={successStories} />
-
-          <motion.div
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            className="text-center mt-12"
-          >
-            <Link to="/success-stories">
-              <Button
-                variant="outline"
-                size="lg"
-                icon={<ArrowRight className="w-5 h-5" />}
-              >
-                Read More Stories
-              </Button>
-            </Link>
-          </motion.div>
-        </div>
-      </section>
+          )}
 
 
       {/* Nearby Shelters */}

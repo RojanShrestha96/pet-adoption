@@ -30,6 +30,7 @@ import { MapView } from "../../components/shelters/MapView";
 import { AdoptionModal } from "../../components/adoption/AdoptionModal";
 import api from "../../utils/api";
 import { useAuth } from "../../contexts/AuthContext";
+import { formatAge } from "../../utils/ageUtils";
 
 // Health status variant mapping
 const healthVariant: Record<string, "success" | "warning" | "error" | "info" | "neutral"> = {
@@ -130,7 +131,10 @@ export function PetDetailPage() {
             vaccinated: response.data.medical?.isVaccinated || false,
             neutered: response.data.medical?.isNeutered || false,
             microchipped: response.data.medical?.isMicrochipped || false,
-          }
+          },
+          behaviour: response.data.behaviour || {},
+          environment: response.data.environment || {},
+          estimatedMonthlyCost: response.data.estimatedMonthlyCost || 0
         };
         
         setPet(transformedPet);
@@ -165,7 +169,8 @@ export function PetDetailPage() {
     localStorage.setItem(`application-id-${id}`, appId);
     setHasApplied(true);
     setApplicationId(appId);
-    // showToast handled in modal
+    // Redirect immediately
+    navigate(`/application-tracking/${appId}`);
   };
 
   // Loading state
@@ -410,25 +415,33 @@ export function PetDetailPage() {
                     { label: "Good w/ Pets", val: pet.compatibility?.pets },
                     { label: "Apartment Friendly", val: pet.compatibility?.apartment },
                     { label: "Home Type Needed", val: pet.environment?.idealEnvironment || "Any" },
-                    { label: "Min Space", val: pet.environment?.minSpaceSqm ? `${pet.environment.minSpaceSqm} sqm` : "N/A" },
-                    { label: "Est. Monthly Cost", val: pet.financial?.estimatedMonthlyCost ? `Rs ${pet.financial.estimatedMonthlyCost}` : "N/A" },
+                    { label: "Min Space", val: pet.environment?.minSpaceSqm > 0 ? `${pet.environment.minSpaceSqm} sqm` : "Any" },
+                    { label: "Est. Monthly Cost", val: pet.estimatedMonthlyCost > 0 ? `Rs ${pet.estimatedMonthlyCost}` : "N/A" },
                     { label: "Energy Level", val: pet.behaviour?.energyScore ? `${pet.behaviour.energyScore}/5` : "N/A" },
-                    { label: "Independence", val: pet.behaviour?.independenceTolerance || "N/A" },
-                  ].map((req, idx) => (
-                    <div key={idx} className="bg-gray-50 p-3 rounded-xl border border-gray-100">
-                      <p className="text-xs text-gray-400 font-semibold mb-1 uppercase tracking-wide">{req.label}</p>
-                      {typeof req.val === "boolean" ? (
-                        <span className={`text-sm font-bold flex items-center gap-1.5 ${req.val ? "text-green-600" : "text-red-500"}`}>
-                          {req.val ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-                          {req.val ? "Yes" : "No"}
-                        </span>
-                      ) : (
-                        <span className="text-sm font-bold text-gray-800 capitalize">
-                          {String(req.val).replace(/-/g, " ")}
-                        </span>
-                      )}
-                    </div>
-                  ))}
+                    { label: "Independence", val: pet.behaviour?.attachmentStyle || "N/A" },
+                  ].map((req, idx) => {
+                    // Normalize boolean-like strings for compatibility badges
+                    const isYes = String(req.val).toLowerCase() === "yes" || req.val === true;
+                    const isNo = String(req.val).toLowerCase() === "no" || req.val === false;
+                    const isConditional = String(req.val).toLowerCase() === "with-proper-intro";
+                    const isBooleanLike = isYes || isNo || isConditional;
+
+                    return (
+                      <div key={idx} className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                        <p className="text-xs text-gray-400 font-semibold mb-1 uppercase tracking-wide">{req.label}</p>
+                        {isBooleanLike && (typeof req.val === "string" || typeof req.val === "boolean") ? (
+                          <span className={`text-sm font-bold flex items-center gap-1.5 ${isYes ? "text-green-600" : isConditional ? "text-amber-600" : "text-red-500"}`}>
+                            {isYes ? <CheckCircle className="w-4 h-4" /> : isConditional ? <Activity className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                            {isYes ? "Yes" : isConditional ? "Intro Needed" : "No"}
+                          </span>
+                        ) : (
+                          <span className="text-sm font-bold text-gray-800 capitalize">
+                            {!req.val || req.val === "N/A" ? "N/A" : String(req.val).replace(/-/g, " ")}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </motion.div>
@@ -451,123 +464,7 @@ export function PetDetailPage() {
               <MedicalRecord medical={pet.medical} />
             </motion.div>
 
-            {/* Behaviour Notes */}
-            <motion.div
-              initial={{
-                opacity: 0,
-                y: 20,
-              }}
-              animate={{
-                opacity: 1,
-                y: 0,
-              }}
-              transition={{
-                duration: 0.5,
-                delay: 0.5,
-              }}
-              className="p-6"
-              style={{
-                background: "var(--color-card)",
-                borderRadius: "var(--radius-lg)",
-                boxShadow: "var(--shadow-sm)",
-              }}
-            >
-              <h3
-                className="text-xl font-bold mb-4"
-                style={{
-                  color: "var(--color-text)",
-                }}
-              >
-                Behaviour Notes
-              </h3>
-              <div className="space-y-3">
-                <div className="flex items-start gap-3">
-                  <div
-                    className="p-2 rounded-lg mt-1"
-                    style={{
-                      background: "var(--color-primary)",
-                      opacity: 0.1,
-                    }}
-                  >
-                    <Activity
-                      className="w-5 h-5"
-                      style={{
-                        color: "var(--color-primary)",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <p
-                      className="font-semibold mb-1"
-                      style={{
-                        color: "var(--color-text)",
-                      }}
-                    >
-                      Energy Level
-                    </p>
-                    <p
-                      className="text-sm"
-                      style={{
-                        color: "var(--color-text-light)",
-                      }}
-                    >
-                      {pet.behaviour?.energyScore === 5
-                        ? "Very High - Needs 2+ hours exercise daily"
-                        : pet.behaviour?.energyScore === 4
-                        ? "High - Needs regular active play daily"
-                        : pet.behaviour?.energyScore === 3
-                        ? "Moderate - Needs daily walks"
-                        : pet.behaviour?.energyScore === 2
-                        ? "Low - Short walks are fine"
-                        : pet.behaviour?.energyScore === 1
-                        ? "Very Low - Mostly resting"
-                        : "Energy level not specified"}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div
-                    className="p-2 rounded-lg mt-1"
-                    style={{
-                      background: "var(--color-secondary)",
-                      opacity: 0.1,
-                    }}
-                  >
-                    <Users
-                      className="w-5 h-5"
-                      style={{
-                        color: "var(--color-secondary)",
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <p
-                      className="font-semibold mb-1"
-                      style={{
-                        color: "var(--color-text)",
-                      }}
-                    >
-                      Attachment Style & Independence
-                    </p>
-                    <p
-                      className="text-sm"
-                      style={{
-                        color: "var(--color-text-light)",
-                      }}
-                    >
-                      {pet.behaviour?.attachmentStyle === "velcro"
-                        ? "Velcro — Needs near-constant human presence and may have separation anxiety"
-                        : pet.behaviour?.attachmentStyle === "independent"
-                        ? "Independent — Content without constant contact"
-                        : pet.behaviour?.attachmentStyle === "moderate"
-                        ? "Moderate — Enjoys company but manages alone"
-                        : "Attachment style not specified."}
-                      {pet.behaviour?.separationAnxiety && pet.behaviour.separationAnxiety !== "none" ? ` (Note: Shows ${pet.behaviour.separationAnxiety} separation anxiety)` : ""}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
+
           </div>
 
           {/* Right Column - Quick Info & CTA */}
@@ -585,7 +482,7 @@ export function PetDetailPage() {
               transition={{
                 duration: 0.5,
               }}
-              className="p-6 sticky top-24"
+              className="p-6"
               style={{
                 background: "var(--color-card)",
                 borderRadius: "var(--radius-lg)",
@@ -694,7 +591,7 @@ export function PetDetailPage() {
                         color: "var(--color-text)",
                       }}
                     >
-                      {pet.age}
+                      {formatAge(pet.age)}
                     </p>
                   </div>
                 </div>

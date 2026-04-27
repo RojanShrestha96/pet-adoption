@@ -29,7 +29,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     document.documentElement.classList.add('theme-switching');
 
     // Remove all theme classes
-    document.documentElement.classList.remove('theme-friendly', 'theme-bold', 'theme-royal');
+    document.documentElement.classList.remove('theme-friendly', 'theme-bold');
 
     // Add new theme class
     document.documentElement.classList.add(getThemeClass(themeName));

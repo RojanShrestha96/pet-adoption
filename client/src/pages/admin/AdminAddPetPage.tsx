@@ -1,6 +1,9 @@
-import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
+import { useAuth } from "../../contexts/AuthContext";
+import { useToast } from "../../components/ui/Toast";
+import { LoadingSpinner } from "../../components/common/LoadingSpinner";
 import {
   ArrowLeft,
   Save,
@@ -30,8 +33,9 @@ interface Section {
   isOpen: boolean;
 }
 export function AdminAddPetPage() {
-  const navigate = useNavigate();
-  const [showPreview, setShowPreview] = useState(false);
+  const { token } = useAuth();
+  const { showToast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [images, setImages] = useState<string[]>([]);
   const [vetRecords, setVetRecords] = useState<string[]>([]);
   const [videos, setVideos] = useState<string[]>([]);
@@ -149,13 +153,60 @@ export function AdminAddPetPage() {
         : [...prev.temperament, trait],
     }));
   };
-  const handleSaveDraft = () => {
-    alert("Pet saved as draft!");
-    navigate("/admin/dashboard");
-  };
-  const handlePublish = () => {
-    alert("Pet published successfully!");
-    navigate("/admin/dashboard");
+  const handlePublish = async () => {
+    if (!formData.name || !formData.species || !formData.shelterAssignment) {
+        showToast("Please fill in all required fields (Name, Species, Shelter)", "error");
+        return;
+    }
+
+    setIsSubmitting(true);
+    try {
+        const payload = {
+            ...formData,
+            images,
+            medical: {
+                isVaccinated: formData.vaccinationStatus === "fully-vaccinated",
+                healthStatus: "healthy",
+                medicalNotes: formData.medicalHistory,
+                microchipId: formData.microchipNumber,
+                medicalDocuments: vetRecords
+            },
+            behaviour: {
+                energyScore: formData.energyScore ? Number(formData.energyScore) : undefined,
+                separationAnxiety: formData.separationAnxiety || undefined,
+                attachmentStyle: formData.attachmentStyle || undefined,
+                trainingDifficulty: formData.trainingDifficulty || undefined,
+                noiseLevel: formData.noiseLevel || undefined,
+                sheddingLevel: formData.sheddingLevel || undefined,
+            },
+            // Derived/Canonical fields
+            energyLevel: Number(formData.energyScore) <= 2 ? 'low' : Number(formData.energyScore) === 3 ? 'moderate' : Number(formData.energyScore) === 4 ? 'high' : 'very-high',
+            environment: {
+                idealEnvironment: formData.idealEnvironment || undefined,
+                minSpaceSqm: formData.minSpaceSqm ? Number(formData.minSpaceSqm) : 0,
+            },
+            estimatedMonthlyCost: formData.estimatedMonthlyCost ? Number(formData.estimatedMonthlyCost) : 0,
+            compatibility: {
+                goodWithKids: formData.goodWithKids,
+                goodWithPets: formData.goodWithPets,
+            },
+            // Admin published pets go straight to approved
+            reviewStatus: 'approved',
+            adoptionStatus: 'available'
+        };
+
+        const response = await axios.post("http://localhost:5000/api/pets", payload, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+
+        showToast("Pet published successfully! 🐾", "success");
+        navigate("/admin/dashboard");
+    } catch (error: any) {
+        console.error("Error publishing pet:", error);
+        showToast(error.response?.data?.message || "Failed to publish pet", "error");
+    } finally {
+        setIsSubmitting(false);
+    }
   };
   const renderSection = (section: Section) => {
     const Icon = section.icon;
@@ -1001,10 +1052,11 @@ export function AdminAddPetPage() {
               <Button
                 variant="primary"
                 size="lg"
-                icon={<Check className="w-5 h-5" />}
+                icon={isSubmitting ? <LoadingSpinner size="sm" /> : <Check className="w-5 h-5" />}
                 onClick={handlePublish}
+                disabled={isSubmitting}
               >
-                Publish Pet
+                {isSubmitting ? "Publishing..." : "Publish Pet"}
               </Button>
             </div>
           </div>

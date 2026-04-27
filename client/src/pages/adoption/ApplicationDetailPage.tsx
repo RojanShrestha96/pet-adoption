@@ -4,7 +4,7 @@ import {
   ArrowLeft, CheckCircle, XCircle, FileText, User, Home, Phone, Mail,
   Clock, Dog, Cat, MapPin, Heart, CalendarCheck, ChevronDown, Eye,
   Loader2, AlertCircle, AlertTriangle, Activity, Shield, ExternalLink,
-  Zap, TrendingUp, PawPrint, Info, RefreshCw, Sparkles, MessageSquare, Edit2
+  Zap, TrendingUp, PawPrint, Info, RefreshCw, Sparkles, MessageSquare, Edit2, CheckSquare
 } from "lucide-react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { ShelterSidebar } from "../../components/layout/ShelterSidebar";
@@ -13,6 +13,7 @@ import { ShelterFinalizationPanel } from "../../components/adoption/ShelterFinal
 import { NotificationCenter } from "../../components/common/NotificationCenter";
 import { EditPetModal } from "../../components/EditPetModal";
 import api from "../../utils/api";
+import { formatAge } from "../../utils/ageUtils";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { Modal } from "../../components/ui/Modal";
@@ -91,7 +92,8 @@ const getRiskIndicators = (app: any) => {
   if (!app) return [];
   const risks: { label: string; level: "high" | "medium" | "low" }[] = [];
   if (app.household?.rentOwn === "rent") {
-    const hasLL = (app.documents || []).some((d: any) => d.name?.toLowerCase().includes("landlord"));
+    const hasLL = app.household?.landlordPermission === true || 
+                 (app.documents || []).some((d: any) => d.name?.toLowerCase().includes("landlord"));
     risks.push(hasLL ? { label: "Renting – Landlord Permission ✓", level: "low" } : { label: "Renting – No Landlord Permission", level: "high" });
   }
   if (app.household?.hasChildren) risks.push({ label: "Children in Home", level: "medium" });
@@ -192,6 +194,16 @@ export function ApplicationDetailPage() {
   const [currentProfile, setCurrentProfile] = useState<any>(null);
   const [isEditPetModalOpen, setIsEditPetModalOpen] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{ open: boolean; title: string; message: string; confirmLabel: string; danger: boolean; action: () => void }>({ open: false, title: "", message: "", confirmLabel: "Confirm", danger: false, action: () => {} });
+  const [activeTab, setActiveTab] = useState("overview");
+
+  const tabs = [
+    { id: "overview", label: "Overview", icon: Zap, color: "text-amber-500", bg: "bg-amber-50" },
+    { id: "application", label: "Application", icon: User, color: "text-blue-500", bg: "bg-blue-50" },
+    { id: "pet", label: "Pet Details", icon: PawPrint, color: "text-purple-500", bg: "bg-purple-50" },
+    { id: "docs", label: "Documents", icon: FileText, color: "text-green-500", bg: "bg-green-50" },
+    { id: "activity", label: "Activity", icon: Activity, color: "text-violet-500", bg: "bg-violet-50" },
+    { id: "finalize", label: "Finalize", icon: CheckSquare, color: "text-rose-500", bg: "bg-rose-50" },
+  ];
 
   const confirm = (title: string, message: string, action: () => void, opts?: { confirmLabel?: string; danger?: boolean }) =>
     setConfirmModal({ open: true, title, message, confirmLabel: opts?.confirmLabel || "Confirm", danger: opts?.danger || false, action });
@@ -402,7 +414,7 @@ export function ApplicationDetailPage() {
                         {application.pet?.environment?.idealEnvironment === "garden-required" ? (
                           <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-bold flex items-center gap-1"><Home className="w-3 h-3" />Garden Required</span>
                         ) : null}
-                        {[application.pet?.breed, application.pet?.age ? `${application.pet.age} yrs` : null, application.pet?.gender, application.pet?.size].filter(Boolean).map((chip, i) => (
+                        {[application.pet?.breed, application.pet?.age ? formatAge(application.pet.age) : null, application.pet?.gender, application.pet?.size].filter(Boolean).map((chip, i) => (
                           <span key={i} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full font-medium">{chip}</span>
                         ))}
                         <Link to={`/pet/${application.pet?._id}`} className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full font-medium hover:bg-blue-100 transition-colors">
@@ -470,412 +482,539 @@ export function ApplicationDetailPage() {
             <div className="grid lg:grid-cols-3 gap-4">
               {/* Left column (B + C) */}
               <div className="lg:col-span-2 space-y-4">
-              
-                {/* ═══ SECTION: FINALIZATION PANEL ═══ */}
-                <ShelterFinalizationPanel 
-                  applicationId={application._id} 
-                  application={application} 
-                  onRefresh={loadApplication} 
-                />
-
-                {/* ═══ SECTION B: RISK & COMPATIBILITY INTELLIGENCE ═══ */}
-                {settings.compatibilityIntelligenceEnabled && (
-                <Card className="overflow-hidden border border-gray-100 shadow-sm">
-                  <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="p-2 rounded-lg bg-violet-50 text-violet-600"><Zap className="w-4 h-4" /></div>
-                      <h2 className="text-sm font-bold text-gray-800">Compatibility Intelligence</h2>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-2xl font-black ${scoreColor}`}>{finalScore}</span>
-                      <div>
-                        <p className="text-[10px] text-gray-400">/100</p>
-                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${scoreBadgeCls}`}>{scoreLabel}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-5">
-                    {/* Compatibility Table */}
-                    <table className="w-full text-sm mb-4">
-                      <thead>
-                        <tr className="text-[10px] text-gray-400 uppercase tracking-wider border-b border-gray-100">
-                          <th className="text-left pb-2 font-semibold">Factor</th>
-                          <th className="text-center pb-2 font-semibold w-20">Score</th>
-                          <th className="text-left pb-2 font-semibold pl-3">Priority</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {factors.map((factor: any) => {
-                          const pct = factor.maxScore > 0 ? (factor.score / factor.maxScore) * 100 : 0;
-                          const grade = pct >= 75 ? 'excellent' : pct >= 50 ? 'moderate' : 'low';
-                          const gradeColor = grade === 'excellent' ? 'green' : grade === 'moderate' ? 'amber' : 'red';
-                          const c = colorMap[gradeColor as keyof typeof colorMap] || colorMap.red;
-                          return (
-                            <tr key={factor.label || factor.name || Math.random().toString()} className="border-b border-gray-50 group hover:bg-gray-50/50 transition-colors">
-                              <td className="py-2.5 pr-3 font-medium text-gray-700" title={factor.explanation}>{factor.label || factor.name || "Unknown Factor"}</td>
-                              <td className="py-2.5 text-center">
-                                <span className={`font-bold ${c.text}`}>{factor.score}/{factor.maxScore}</span>
-                              </td>
-                              <td className="py-2.5 pl-3">
-                                <div className="flex items-center gap-2">
-                                  <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden min-w-[60px]">
-                                    <motion.div className={`h-full rounded-full ${c.bar}`} initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.8 }} />
-                                  </div>
-                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border shrink-0 ${gradeColor === 'green' ? 'bg-green-50 text-green-600 border-green-200' : gradeColor === 'amber' ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-red-50 text-red-600 border-red-200'} capitalize`}>{grade}</span>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                      <tfoot>
-                        <tr className="border-t-2 border-gray-200">
-                          <td className="pt-3 font-black text-gray-900 text-sm">Final Score</td>
-                          <td className="pt-3 text-center">
-                            <span className={`font-black text-lg ${scoreColor}`}>{finalScore}/100</span>
-                          </td>
-                          <td className="pt-3 pl-3 flex items-center gap-2">
-                            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${scoreBadgeCls}`}>{scoreLabel}</span>
-                            <span className={`text-[10px] font-bold px-2 py-1 rounded border ${confidenceLevel === "high" ? "bg-green-50 text-green-700 border-green-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
-                              {confidenceLevel === "high" ? "High Confidence" : "Low Confidence"}
-                            </span>
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
-
-                    {/* Risk Indicators */}
-                    {risks.length > 0 && (
-                      <div className="pt-3 border-t border-gray-100">
-                        <div className="flex items-center gap-1.5 mb-2.5">
-                          <Shield className="w-3.5 h-3.5 text-gray-400" />
-                          <p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wide">Risk Indicators</p>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {risks.map((r, i) => <RiskChip key={i} label={r.label} level={r.level} />)}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </Card>
-                )}
-
-                {/* ═══ SECTION B.5: AI INSIGHTS ═══ */}
-                {settings.compatibilityIntelligenceEnabled && (
-                  <Card className="overflow-hidden border border-[var(--color-primary)] shadow-sm bg-indigo-50/10">
-                    <div className="px-5 py-4 border-b border-indigo-100 flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <div className="p-2 rounded-lg bg-[var(--color-primary)] text-white"><Sparkles className="w-4 h-4" /></div>
-                        <h2 className="text-sm font-bold text-gray-800">Analyst AI Insights</h2>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        icon={<RefreshCw className={`w-3.5 h-3.5 ${regenerating ? 'animate-spin' : ''}`} />}
-                        onClick={handleRegenerateAI}
-                        disabled={regenerating}
-                        className="text-indigo-600 hover:bg-indigo-50"
+                {/* ═══ Tab Navigation (Equal Spacing & Width) ═══ */}
+                <div className="flex items-center gap-1 p-1 bg-white border border-gray-200 rounded-2xl shadow-sm mb-4 overflow-x-auto no-scrollbar scroll-smooth whitespace-nowrap">
+                  {tabs.map((tab) => {
+                    const isActive = activeTab === tab.id;
+                    const Icon = tab.icon;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`relative flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 min-w-fit ${
+                          isActive ? tab.color : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
+                        }`}
                       >
-                        {regenerating ? "Generating..." : "Regenerate"}
-                      </Button>
-                    </div>
-
-                    <div className="p-5">
-                      {(!aiInsights || aiInsights.status === 'generating' || aiInsights.status === 'none') ? (
-                         <div className="flex flex-col items-center justify-center py-6 text-indigo-400">
-                           <Loader2 className="w-8 h-8 animate-spin mb-3" />
-                           <p className="text-sm font-medium">Analyzing compatibility data...</p>
-                         </div>
-                      ) : aiInsights.status === 'error' ? (
-                        <div className="space-y-4">
-                          <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex gap-3">
-                            <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
-                            <div>
-                              <p className="text-sm font-bold text-red-900">AI Generation Failed</p>
-                              <p className="text-xs text-red-700 mt-1">{aiInsights.error || "The AI service encountered an error."}</p>
+                        {isActive && (
+                          <motion.div
+                            layoutId="activeTabBackground"
+                            className={`absolute inset-0 ${tab.bg} rounded-xl`}
+                            transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                          />
+                        )}
+                        <Icon className={`relative z-10 w-4 h-4 ${isActive ? tab.color : "text-gray-400"}`} />
+                        <span className="relative z-10">{tab.label}</span>
+                        {isActive && (
+                          <motion.div
+                            layoutId="activeTabUnderline"
+                            className={`absolute bottom-1 left-4 right-4 h-0.5 ${tab.color.replace('text', 'bg')} rounded-full`}
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              
+                <AnimatePresence mode="wait">
+                  {activeTab === "overview" && (
+                    <motion.div
+                      key="overview-tab"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="space-y-4"
+                    >
+                      {/* ═══ SECTION B: RISK & COMPATIBILITY INTELLIGENCE ═══ */}
+                      {settings.compatibilityIntelligenceEnabled && (
+                        <Card className="overflow-hidden border border-gray-100 shadow-sm">
+                          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                            <div className="flex items-center gap-2.5">
+                              <div className="p-2 rounded-lg bg-violet-50 text-violet-600"><Zap className="w-4 h-4" /></div>
+                              <h2 className="text-sm font-bold text-gray-800">Compatibility Intelligence</h2>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-2xl font-black ${scoreColor}`}>{finalScore}</span>
+                              <div>
+                                <p className="text-[10px] text-gray-400">/100</p>
+                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${scoreBadgeCls}`}>{scoreLabel}</span>
+                              </div>
                             </div>
                           </div>
-                          <div className="text-center">
+
+                          <div className="p-5">
+                            {/* Compatibility Table */}
+                            <table className="w-full text-sm mb-4">
+                              <thead>
+                                <tr className="text-[10px] text-gray-400 uppercase tracking-wider border-b border-gray-100">
+                                  <th className="text-left pb-2 font-semibold">Factor</th>
+                                  <th className="text-center pb-2 font-semibold w-20">Score</th>
+                                  <th className="text-left pb-2 font-semibold pl-3">Priority</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {factors.map((factor: any) => {
+                                  const pct = factor.maxScore > 0 ? (factor.score / factor.maxScore) * 100 : 0;
+                                  const grade = pct >= 75 ? 'excellent' : pct >= 50 ? 'moderate' : 'low';
+                                  const gradeColor = grade === 'excellent' ? 'green' : grade === 'moderate' ? 'amber' : 'red';
+                                  const c = colorMap[gradeColor as keyof typeof colorMap] || colorMap.red;
+                                  return (
+                                    <tr key={factor.label || factor.name || Math.random().toString()} className="border-b border-gray-50 group hover:bg-gray-50/50 transition-colors">
+                                      <td className="py-2.5 pr-3 font-medium text-gray-700" title={factor.explanation}>{factor.label || factor.name || "Unknown Factor"}</td>
+                                      <td className="py-2.5 text-center">
+                                        <span className={`font-bold ${c.text}`}>{factor.score}/{factor.maxScore}</span>
+                                      </td>
+                                      <td className="py-2.5 pl-3">
+                                        <div className="flex items-center gap-2">
+                                          <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden min-w-[60px]">
+                                            <motion.div className={`h-full rounded-full ${c.bar}`} initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.8 }} />
+                                          </div>
+                                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border shrink-0 ${gradeColor === 'green' ? 'bg-green-50 text-green-600 border-green-200' : gradeColor === 'amber' ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-red-50 text-red-600 border-red-200'} capitalize`}>{grade}</span>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                              <tfoot>
+                                <tr className="border-t-2 border-gray-200">
+                                  <td className="pt-3 font-black text-gray-900 text-sm">Final Score</td>
+                                  <td className="pt-3 text-center">
+                                    <span className={`font-black text-lg ${scoreColor}`}>{finalScore}/100</span>
+                                  </td>
+                                  <td className="pt-3 pl-3 flex items-center gap-2">
+                                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${scoreBadgeCls}`}>{scoreLabel}</span>
+                                    <span className={`text-[10px] font-bold px-2 py-1 rounded border ${confidenceLevel === "high" ? "bg-green-50 text-green-700 border-green-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
+                                      {confidenceLevel === "high" ? "High Confidence" : "Low Confidence"}
+                                    </span>
+                                  </td>
+                                </tr>
+                              </tfoot>
+                            </table>
+
+                            {/* Risk Indicators */}
+                            {risks.length > 0 && (
+                              <div className="pt-3 border-t border-gray-100">
+                                <div className="flex items-center gap-1.5 mb-2.5">
+                                  <Shield className="w-3.5 h-3.5 text-gray-400" />
+                                  <p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wide">Risk Indicators</p>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  {risks.map((r, i) => <RiskChip key={i} label={r.label} level={r.level} />)}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </Card>
+                      )}
+
+                      {/* ═══ SECTION B.5: AI INSIGHTS ═══ */}
+                      {settings.compatibilityIntelligenceEnabled && (
+                        <Card className="overflow-hidden border border-[var(--color-primary)] shadow-sm bg-indigo-50/10">
+                          <div className="px-5 py-4 border-b border-indigo-100 flex items-center justify-between">
+                            <div className="flex items-center gap-2.5">
+                              <div className="p-2 rounded-lg bg-[var(--color-primary)] text-white"><Sparkles className="w-4 h-4" /></div>
+                              <h2 className="text-sm font-bold text-gray-800">Analyst AI Insights</h2>
+                            </div>
                             <Button
-                              variant="outline"
+                              variant="ghost"
                               size="sm"
                               icon={<RefreshCw className={`w-3.5 h-3.5 ${regenerating ? 'animate-spin' : ''}`} />}
                               onClick={handleRegenerateAI}
                               disabled={regenerating}
+                              className="text-indigo-600 hover:bg-indigo-50"
                             >
-                              Try Again
+                              {regenerating ? "Generating..." : "Regenerate"}
                             </Button>
                           </div>
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          {/* Top Concern Box */}
-                          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-3">
-                            <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
-                            <div>
-                              <p className="text-[10px] text-amber-700 uppercase font-black tracking-wider mb-0.5">Primary Concern</p>
-                              <p className="text-sm text-amber-900 font-medium">{aiInsights.topConcern}</p>
-                            </div>
-                          </div>
-                          
-                          {/* Explanation */}
-                          <div>
-                            <p className="text-sm text-gray-700 leading-relaxed font-medium">
-                              {aiInsights.explanation}
-                            </p>
-                          </div>
 
-                          {/* Suggested Interview Prompts */}
-                          <div className="pt-4 mt-2 border-t border-indigo-100">
-                            <div className="flex items-center gap-2 mb-3">
-                              <div className="p-1.5 bg-indigo-100 text-indigo-600 rounded-lg">
-                                <MessageSquare className="w-4 h-4" />
-                              </div>
-                              <div>
-                                <h3 className="text-sm font-bold text-indigo-900">Suggested Interview Prompts</h3>
-                                <p className="text-[10px] text-indigo-600/80 uppercase tracking-widest font-semibold">For the Meet & Greet</p>
-                              </div>
-                            </div>
-                            
-                            <div className="p-3 mb-4 bg-white/50 border border-indigo-100/50 rounded-lg text-xs text-indigo-800 font-medium">
-                              💡 We recommend asking these specific questions during the interview to address the AI's top compatibility concerns.
-                            </div>
-
-                            <ul className="space-y-2.5">
-                              {aiInsights.questions?.map((q: string, i: number) => (
-                                <li key={i} className="group flex items-start gap-3 bg-white rounded-xl p-3 border border-indigo-100 shadow-sm hover:border-indigo-300 transition-colors">
-                                  <div className="w-6 h-6 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                                    {i+1}
+                          <div className="p-5">
+                            {(!aiInsights || aiInsights.status === 'generating' || aiInsights.status === 'none') ? (
+                               <div className="flex flex-col items-center justify-center py-6 text-indigo-400">
+                                 <Loader2 className="w-8 h-8 animate-spin mb-3" />
+                                 <p className="text-sm font-medium">Analyzing compatibility data...</p>
+                               </div>
+                            ) : aiInsights.status === 'error' ? (
+                              <div className="space-y-4">
+                                <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex gap-3">
+                                  <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
+                                  <div>
+                                    <p className="text-sm font-bold text-red-900">AI Generation Failed</p>
+                                    <p className="text-xs text-red-700 mt-1">{aiInsights.error || "The AI service encountered an error."}</p>
                                   </div>
-                                  <span className="text-sm text-gray-700 font-medium leading-relaxed">{q}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
+                                </div>
+                                <div className="text-center">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    icon={<RefreshCw className={`w-3.5 h-3.5 ${regenerating ? 'animate-spin' : ''}`} />}
+                                    onClick={handleRegenerateAI}
+                                    disabled={regenerating}
+                                  >
+                                    Try Again
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-4">
+                                {/* Top Concern Box */}
+                                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-3">
+                                  <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+                                  <div>
+                                    <p className="text-[10px] text-amber-700 uppercase font-black tracking-wider mb-0.5">Primary Concern</p>
+                                    <p className="text-sm text-amber-900 font-medium">{aiInsights.topConcern}</p>
+                                  </div>
+                                </div>
+                                
+                                {/* Explanation */}
+                                <div>
+                                  <p className="text-sm text-gray-700 leading-relaxed font-medium">
+                                    {aiInsights.explanation}
+                                  </p>
+                                </div>
 
-                          {/* Footer */}
-                          <p className="text-[10px] text-gray-400 text-center pt-2">
-                            Generated {fmtDT(aiInsights.generatedAt)} · AI insights are advisory and do not make adoption decisions.
-                          </p>
-                        </div>
+                                {/* Suggested Interview Prompts */}
+                                <div className="pt-4 mt-2 border-t border-indigo-100">
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <div className="p-1.5 bg-indigo-100 text-indigo-600 rounded-lg">
+                                      <MessageSquare className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                      <h3 className="text-sm font-bold text-indigo-900">Suggested Interview Prompts</h3>
+                                      <p className="text-[10px] text-indigo-600/80 uppercase tracking-widest font-semibold">For the Meet & Greet</p>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="p-3 mb-4 bg-white/50 border border-indigo-100/50 rounded-lg text-xs text-indigo-800 font-medium">
+                                    💡 We recommend asking these specific questions during the interview to address the AI's top compatibility concerns.
+                                  </div>
+
+                                  <ul className="space-y-2.5">
+                                    {aiInsights.questions?.map((q: string, i: number) => (
+                                      <li key={i} className="group flex items-start gap-3 bg-white rounded-xl p-3 border border-indigo-100 shadow-sm hover:border-indigo-300 transition-colors">
+                                        <div className="w-6 h-6 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                          {i+1}
+                                        </div>
+                                        <span className="text-sm text-gray-700 font-medium leading-relaxed">{q}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+
+                                {/* ═══ Professional Advisor Disclaimer (System Matched) ═══ */}
+                                <div className="mt-8 pt-6 border-t border-gray-100">
+                                  <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                                    <div className="flex items-center gap-3">
+                                      <div className="p-2 rounded-xl bg-[var(--color-primary)] text-white">
+                                        <Info className="w-4.5 h-4.5" />
+                                      </div>
+                                      <div>
+                                        <p className="text-xs font-black text-gray-400 uppercase tracking-widest leading-none mb-1">AI ADVISORY</p>
+                                        <p className="text-[13px] font-bold text-gray-700 leading-tight">
+                                          Insights are advisory and do not replace human judgment.
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="text-center sm:text-right shrink-0">
+                                      <span className="text-[10px] font-bold text-gray-400 block uppercase tracking-tighter">Generated At</span>
+                                      <span className="text-xs font-black text-[var(--color-primary)]">
+                                        {fmtDT(aiInsights.generatedAt)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </Card>
                       )}
-                    </div>
-                  </Card>
-                )}
+                    </motion.div>
+                  )}
 
                 {/* ═══ SECTION C: STRUCTURED REVIEW DATA ═══ */}
 
-                {/* Pet Requirements & Traits */}
-                <SectionCollapsible 
-                  icon={PawPrint} 
-                  iconBg="bg-amber-50 text-amber-600" 
-                  title="Pet Requirements & Traits" 
-                  expanded={expanded.petDetails} 
-                  onToggle={() => toggle("petDetails")}
-                >
-                  <div className="flex justify-end -mt-8 mb-2">
-                    <div onClick={(e) => e.stopPropagation()}>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        icon={<Edit2 className="w-3.5 h-3.5" />}
-                        className="text-amber-600 hover:bg-amber-50"
-                        onClick={() => setIsEditPetModalOpen(true)}
+                  {activeTab === "pet" && (
+                    <motion.div
+                      key="pet-tab"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="space-y-4"
+                    >
+                      {/* Pet Requirements & Traits */}
+                      <SectionCollapsible 
+                        icon={PawPrint} 
+                        iconBg="bg-amber-50 text-amber-600" 
+                        title="Pet Requirements & Traits" 
+                        expanded={expanded.petDetails} 
+                        onToggle={() => toggle("petDetails")}
                       >
-                        Edit Pet
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="space-y-4 pt-1">
-                    
-                    {/* Medical details */}
-                    {application.pet?.medical && (
-                      <div>
-                        <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-2 flex items-center gap-1.5"><Heart className="w-3 h-3" />Medical & Health</p>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                          {[
-                            { l: "Health Status", v: application.pet.medical.healthStatus || "N/A" },
-                            { l: "Sterilized", v: application.pet.medical.isNeutered ? "Yes" : "No" },
-                            { l: "Vaccinated", v: application.pet.medical.isVaccinated ? "Yes" : "No" },
-                            { l: "Microchipped", v: application.pet.medical.isMicrochipped ? "Yes" : "No" },
-                            { l: "Dewormed", v: application.pet.medical.isDewormed ? "Yes" : "No" },
-                            { l: "Special Needs", v: application.pet.medical.isSpecialNeeds ? "Yes" : application.pet.medical.healthStatus === "special-needs" ? "Yes" : "No" },
-                          ].map(({ l, v }) => (
-                            <div key={l} className="bg-gray-50 rounded-lg p-2.5">
-                              <p className="text-[10px] text-gray-400 uppercase font-semibold mb-0.5">{l}</p>
-                              <p className={`text-sm font-semibold capitalize ${v === "Yes" ? "text-amber-600" : "text-gray-800"}`}>{String(v).replace(/-/g, ' ')}</p>
+                        <div className="flex justify-end -mt-8 mb-2">
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              icon={<Edit2 className="w-3.5 h-3.5" />}
+                              className="text-amber-600 hover:bg-amber-50"
+                              onClick={() => setIsEditPetModalOpen(true)}
+                            >
+                              Edit Pet
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="space-y-4 pt-1">
+                          
+                          {/* Medical details */}
+                          {application.pet?.medical && (
+                            <div>
+                              <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-2 flex items-center gap-1.5"><Heart className="w-3 h-3" />Medical & Health</p>
+                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                {[
+                                  { l: "Health Status", v: application.pet.medical.healthStatus || "N/A" },
+                                  { l: "Sterilized", v: application.pet.medical.isNeutered ? "Yes" : "No" },
+                                  { l: "Vaccinated", v: application.pet.medical.isVaccinated ? "Yes" : "No" },
+                                  { l: "Microchipped", v: application.pet.medical.isMicrochipped ? "Yes" : "No" },
+                                  { l: "Dewormed", v: application.pet.medical.isDewormed ? "Yes" : "No" },
+                                  { l: "Special Needs", v: application.pet.medical.isSpecialNeeds ? "Yes" : application.pet.medical.healthStatus === "special-needs" ? "Yes" : "No" },
+                                ].map(({ l, v }) => (
+                                  <div key={l} className="bg-gray-50 rounded-lg p-2.5">
+                                    <p className="text-[10px] text-gray-400 uppercase font-semibold mb-0.5">{l}</p>
+                                    <p className={`text-sm font-semibold capitalize ${v === "Yes" ? "text-amber-600" : "text-gray-800"}`}>{String(v).replace(/-/g, ' ')}</p>
+                                  </div>
+                                ))}
+                              </div>
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                          )}
 
-                    {/* Behaviour */}
-                    {application.pet?.behaviour && (
-                      <div className="pt-2 border-t border-gray-100">
-                        <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-2 flex items-center gap-1.5"><Activity className="w-3 h-3" />Behaviour Traits</p>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                          {[
-                            { l: "Energy (1-5)", v: application.pet.behaviour.energyScore || "N/A" },
-                            { l: "Separation Anxiety", v: application.pet.behaviour.separationAnxiety || "N/A" },
-                            { l: "Attachment Style", v: application.pet.behaviour.attachmentStyle || "N/A" },
-                            { l: "Training Difficulty", v: application.pet.behaviour.trainingDifficulty || "N/A" },
-                            { l: "Noise Level", v: application.pet.behaviour.noiseLevel || "N/A" },
-                            { l: "Shedding Level", v: application.pet.behaviour.sheddingLevel || "N/A" },
-                          ].map(({ l, v }) => (
-                            <div key={l} className="bg-gray-50 rounded-lg p-2.5">
-                              <p className="text-[10px] text-gray-400 uppercase font-semibold mb-0.5">{l}</p>
-                              <p className="text-sm font-semibold text-gray-800 capitalize">{String(v).replace(/-/g, ' ')}</p>
+                          {/* Behaviour */}
+                          {application.pet?.behaviour && (
+                            <div className="pt-2 border-t border-gray-100">
+                              <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-2 flex items-center gap-1.5"><Activity className="w-3 h-3" />Behaviour Traits</p>
+                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                {[
+                                  { l: "Energy (1-5)", v: application.pet.behaviour.energyScore || "N/A" },
+                                  { l: "Separation Anxiety", v: application.pet.behaviour.separationAnxiety || "N/A" },
+                                  { l: "Attachment Style", v: application.pet.behaviour.attachmentStyle || "N/A" },
+                                  { l: "Training Difficulty", v: application.pet.behaviour.trainingDifficulty || "N/A" },
+                                  { l: "Noise Level", v: application.pet.behaviour.noiseLevel || "N/A" },
+                                  { l: "Shedding Level", v: application.pet.behaviour.sheddingLevel || "N/A" },
+                                ].map(({ l, v }) => (
+                                  <div key={l} className="bg-gray-50 rounded-lg p-2.5">
+                                    <p className="text-[10px] text-gray-400 uppercase font-semibold mb-0.5">{l}</p>
+                                    <p className="text-sm font-semibold text-gray-800 capitalize">{String(v).replace(/-/g, ' ')}</p>
+                                  </div>
+                                ))}
+                              </div>
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                          )}
 
-                    {/* Environment & Compatibility */}
-                     <div className="pt-2 border-t border-gray-100">
-                        <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-2 flex items-center gap-1.5"><Home className="w-3 h-3" />Environment & Match</p>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                          {[
-                            { l: "Ideal Home", v: application.pet?.environment?.idealEnvironment || "N/A" },
-                            { l: "Min Space", v: application.pet?.environment?.minSpaceSqm ? `${application.pet.environment.minSpaceSqm} sqm` : "N/A" },
-                            { l: "Good w/ Kids", v: application.pet?.compatibility?.goodWithKids === undefined ? "N/A" : String(application.pet.compatibility.goodWithKids).replace(/-/g, ' ') },
-                            { l: "Good w/ Pets", v: application.pet?.compatibility?.goodWithPets === undefined ? "N/A" : String(application.pet.compatibility.goodWithPets).replace(/-/g, ' ') },
-                          ].map(({ l, v }) => (
-                            <div key={l} className="bg-gray-50 rounded-lg p-2.5">
-                              <p className="text-[10px] text-gray-400 uppercase font-semibold mb-0.5">{l}</p>
-                              <p className="text-sm font-semibold text-gray-800 capitalize">{v}</p>
+                          {/* Environment & Compatibility */}
+                           <div className="pt-2 border-t border-gray-100">
+                              <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-2 flex items-center gap-1.5"><Home className="w-3 h-3" />Environment & Match</p>
+                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                {[
+                                  { l: "Ideal Home", v: application.pet?.environment?.idealEnvironment || "N/A" },
+                                  { l: "Min Space", v: application.pet?.environment?.minSpaceSqm ? `${application.pet.environment.minSpaceSqm} sqm` : "N/A" },
+                                  { l: "Good w/ Kids", v: application.pet?.compatibility?.goodWithKids === undefined ? "N/A" : String(application.pet.compatibility.goodWithKids).replace(/-/g, ' ') },
+                                  { l: "Good w/ Pets", v: application.pet?.compatibility?.goodWithPets === undefined ? "N/A" : String(application.pet.compatibility.goodWithPets).replace(/-/g, ' ') },
+                                ].map(({ l, v }) => (
+                                  <div key={l} className="bg-gray-50 rounded-lg p-2.5">
+                                    <p className="text-[10px] text-gray-400 uppercase font-semibold mb-0.5">{l}</p>
+                                    <p className="text-sm font-semibold text-gray-800 capitalize">{v}</p>
+                                  </div>
+                                ))}
+                              </div>
                             </div>
-                          ))}
+
                         </div>
-                      </div>
+                      </SectionCollapsible>
+                    </motion.div>
+                  )}
 
-                  </div>
-                </SectionCollapsible>
-
-                {/* Applicant Details */}
-                <SectionCollapsible icon={User} iconBg="bg-blue-50 text-blue-600" title="Applicant Details" expanded={expanded.applicant} onToggle={() => toggle("applicant")}>
-                  <div className="space-y-4 pt-1">
-                    {application.personalInfo?.address && (
-                      <div className="flex items-start gap-2">
-                        <MapPin className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-                        <p className="text-sm text-gray-700">{application.personalInfo.address}</p>
-                      </div>
-                    )}
-                    {application.household && (
-                      <div className="pt-2 border-t border-gray-100">
-                        <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-2 flex items-center gap-1.5"><Home className="w-3 h-3" />Home &amp; Lifestyle</p>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                          {[
-                            { l: "Home Type", v: application.household.homeType },
-                            { l: "Ownership", v: application.household.rentOwn },
-                            { l: "Fenced Yard", v: application.household.hasFencedYard ? "Yes ✓" : "No" },
-                            { l: "Existing Pets", v: application.household.existingPets || "None" },
-                            { l: "Children", v: application.household.hasChildren ? "Yes" : "No" },
-                            { l: "Routine", v: application.adoptionIntent?.typicalWeekdayRoutine || "N/A" },
-                          ].map(({ l, v }) => (
-                            <div key={l} className="bg-gray-50 rounded-lg p-2.5">
-                              <p className="text-[10px] text-gray-400 uppercase font-semibold mb-0.5">{l}</p>
-                              <p className="text-sm font-semibold text-gray-800">{v}</p>
+                  {activeTab === "application" && (
+                    <motion.div
+                      key="application-tab"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="space-y-4"
+                    >
+                      {/* Applicant Details */}
+                      <SectionCollapsible icon={User} iconBg="bg-blue-50 text-blue-600" title="Applicant Details" expanded={expanded.applicant} onToggle={() => toggle("applicant")}>
+                        <div className="space-y-4 pt-1">
+                          {application.personalInfo?.address && (
+                            <div className="flex items-start gap-2">
+                              <MapPin className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                              <p className="text-sm text-gray-700">{application.personalInfo.address}</p>
                             </div>
-                          ))}
+                          )}
+                          {application.household && (
+                            <div className="pt-2 border-t border-gray-100">
+                              <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide mb-2 flex items-center gap-1.5"><Home className="w-3 h-3" />Home &amp; Lifestyle</p>
+                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                {[
+                                  { l: "Home Type", v: application.household.homeType },
+                                  { l: "Ownership", v: application.household.rentOwn },
+                                  { l: "Fenced Yard", v: application.household.hasFencedYard ? "Yes ✓" : "No" },
+                                  { l: "Existing Pets", v: application.household.existingPets || "None" },
+                                  { l: "Children", v: application.household.hasChildren ? "Yes" : "No" },
+                                  { l: "Routine", v: application.adoptionIntent?.typicalWeekdayRoutine || "N/A" },
+                                ].map(({ l, v }) => (
+                                  <div key={l} className="bg-gray-50 rounded-lg p-2.5">
+                                    <p className="text-[10px] text-gray-400 uppercase font-semibold mb-0.5">{l}</p>
+                                    <p className="text-sm font-semibold text-gray-800">{v}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {application.adoptionIntent && (
+                            <div className="pt-2 border-t border-gray-100 space-y-2">
+                              <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide flex items-center gap-1.5"><PawPrint className="w-3 h-3" />Experience &amp; Intent</p>
+                              {application.adoptionIntent.petExperience && <div><p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">Pet Experience</p><p className="text-sm text-gray-700 leading-relaxed">{application.adoptionIntent.petExperience}</p></div>}
+                              {application.adoptionIntent.specificPetMotivation && <div><p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">Specific Motivation</p><p className="text-sm text-gray-700 leading-relaxed">{application.adoptionIntent.specificPetMotivation}</p></div>}
+                              {application.adoptionIntent.typicalWeekdayRoutine && <div><p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">Weekday Routine</p><p className="text-sm text-gray-700 leading-relaxed">{application.adoptionIntent.typicalWeekdayRoutine}</p></div>}
+                              {application.adoptionIntent.emergencyCarePlan && <div><p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">Emergency Care Plan</p><p className="text-sm text-gray-700 leading-relaxed">{application.adoptionIntent.emergencyCarePlan}</p></div>}
+                              {application.adoptionIntent.monthlyBudgetEstimate && <div><p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">Monthly Budget Estimate</p><p className="text-sm text-gray-700 leading-relaxed">{application.adoptionIntent.monthlyBudgetEstimate}</p></div>}
+                              {application.adoptionIntent.lifeChangesExplanation && <div><p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">Anticipated Life Changes</p><p className="text-sm text-gray-700 leading-relaxed">{application.adoptionIntent.lifeChangesExplanation}</p></div>}
+                            </div>
+                          )}
+                          <div className="flex gap-2 pt-1">
+                            <Button variant="outline" size="sm" onClick={() => window.open(`mailto:${application.personalInfo?.email}`)} icon={<Mail className="w-3.5 h-3.5" />}>Email</Button>
+                            <Button variant="outline" size="sm" onClick={() => window.open(`tel:${application.personalInfo?.phone}`)} icon={<Phone className="w-3.5 h-3.5" />}>Call</Button>
+                          </div>
                         </div>
-                      </div>
-                    )}
-                    {application.adoptionIntent && (
-                      <div className="pt-2 border-t border-gray-100 space-y-2">
-                        <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide flex items-center gap-1.5"><PawPrint className="w-3 h-3" />Experience &amp; Intent</p>
-                        {application.adoptionIntent.petExperience && <div><p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">Pet Experience</p><p className="text-sm text-gray-700 leading-relaxed">{application.adoptionIntent.petExperience}</p></div>}
-                        {application.adoptionIntent.specificPetMotivation && <div><p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">Specific Motivation</p><p className="text-sm text-gray-700 leading-relaxed">{application.adoptionIntent.specificPetMotivation}</p></div>}
-                        {application.adoptionIntent.typicalWeekdayRoutine && <div><p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">Weekday Routine</p><p className="text-sm text-gray-700 leading-relaxed">{application.adoptionIntent.typicalWeekdayRoutine}</p></div>}
-                        {application.adoptionIntent.emergencyCarePlan && <div><p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">Emergency Care Plan</p><p className="text-sm text-gray-700 leading-relaxed">{application.adoptionIntent.emergencyCarePlan}</p></div>}
-                        {application.adoptionIntent.monthlyBudgetEstimate && <div><p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">Monthly Budget Estimate</p><p className="text-sm text-gray-700 leading-relaxed">{application.adoptionIntent.monthlyBudgetEstimate}</p></div>}
-                        {application.adoptionIntent.lifeChangesExplanation && <div><p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">Anticipated Life Changes</p><p className="text-sm text-gray-700 leading-relaxed">{application.adoptionIntent.lifeChangesExplanation}</p></div>}
-                      </div>
-                    )}
-                    <div className="flex gap-2 pt-1">
-                      <Button variant="outline" size="sm" onClick={() => window.open(`mailto:${application.personalInfo?.email}`)} icon={<Mail className="w-3.5 h-3.5" />}>Email</Button>
-                      <Button variant="outline" size="sm" onClick={() => window.open(`tel:${application.personalInfo?.phone}`)} icon={<Phone className="w-3.5 h-3.5" />}>Call</Button>
-                    </div>
-                  </div>
-                </SectionCollapsible>
+                      </SectionCollapsible>
 
-                {/* Profile Delta / Snapshot comparison */}
-                {snapshot && currentProfile && (
-                  <SectionCollapsible icon={Clock} iconBg="bg-orange-50 text-orange-600" title="Profile Updates Since Application" count={deltas.length} expanded={expanded.profileDelta} onToggle={() => toggle("profileDelta")}>
-                    <div className="pt-1">
-                      {deltas.length === 0 ? (
-                        <div className="text-center py-4 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                          <CheckCircle className="w-6 h-6 text-gray-300 mx-auto mb-2" />
-                          <p className="text-sm text-gray-500 font-medium">Profile completely unchanged since application.</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          <p className="text-xs text-gray-500 mb-2">The applicant has updated their profile since submitting this application. Here are the differences:</p>
-                          <div className="space-y-2">
-                            {deltas.map((d, i) => (
-                              <div key={i} className="flex items-center justify-between text-sm bg-gray-50 rounded-lg p-3 border border-orange-100">
-                                <span className="font-semibold text-gray-700 w-1/3 truncate" title={d.label}>{d.label}</span>
-                                <div className="flex items-center gap-2 flex-1 justify-end min-w-0">
-                                  <span className="text-gray-400 line-through truncate max-w-[40%]" title={d.old}>{d.old || "None"}</span>
-                                  <ArrowLeft className="w-3 h-3 text-orange-400 shrink-0 rotate-180" />
-                                  <span className="font-bold text-orange-600 truncate max-w-[40%]" title={d.new}>{d.new || "None"}</span>
+                      {/* Profile Delta / Snapshot comparison */}
+                      {snapshot && currentProfile && (
+                        <SectionCollapsible icon={Clock} iconBg="bg-orange-50 text-orange-600" title="Profile Updates Since Application" count={deltas.length} expanded={expanded.profileDelta} onToggle={() => toggle("profileDelta")}>
+                          <div className="pt-1">
+                            {deltas.length === 0 ? (
+                              <div className="text-center py-4 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                                <CheckCircle className="w-6 h-6 text-gray-300 mx-auto mb-2" />
+                                <p className="text-sm text-gray-500 font-medium">Profile completely unchanged since application.</p>
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                <p className="text-xs text-gray-500 mb-2">The applicant has updated their profile since submitting this application. Here are the differences:</p>
+                                <div className="space-y-2">
+                                  {deltas.map((d, i) => (
+                                    <div key={i} className="flex items-center justify-between text-sm bg-gray-50 rounded-lg p-3 border border-orange-100">
+                                      <span className="font-semibold text-gray-700 w-1/3 truncate" title={d.label}>{d.label}</span>
+                                      <div className="flex items-center gap-2 flex-1 justify-end min-w-0">
+                                        <span className="text-gray-400 line-through truncate max-w-[40%]" title={d.old}>{d.old || "None"}</span>
+                                        <ArrowLeft className="w-3 h-3 text-orange-400 shrink-0 rotate-180" />
+                                        <span className="font-bold text-orange-600 truncate max-w-[40%]" title={d.new}>{d.new || "None"}</span>
+                                      </div>
+                                    </div>
+                                  ))}
                                 </div>
                               </div>
-                            ))}
+                            )}
                           </div>
+                        </SectionCollapsible>
+                      )}
+                    </motion.div>
+                  )}
+
+                  {activeTab === "docs" && (
+                    <motion.div
+                      key="docs-tab"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="space-y-4"
+                    >
+                      {/* Documents */}
+                      {docs.length > 0 && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                          {docs.map((doc: any) => (
+                            <button key={doc.id} onClick={() => setSelectedDoc(doc)}
+                              className={`p-3 border rounded-xl text-left transition-all hover:shadow-sm group ${doc.status === "verified" ? "border-green-200 bg-green-50/40" : doc.status === "rejected" ? "border-red-200 bg-red-50/40" : "border-gray-200 hover:border-blue-300 hover:bg-blue-50/20"}`}>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <div className="p-1.5 bg-white rounded-lg border border-gray-100"><FileText className="w-4 h-4 text-blue-500" /></div>
+                                {doc.status === "verified" && <CheckCircle className="w-4 h-4 text-green-500" />}
+                                {doc.status === "rejected" && <XCircle className="w-4 h-4 text-red-500" />}
+                                {doc.status === "pending" && <Clock className="w-4 h-4 text-amber-400" />}
+                              </div>
+                              <p className="text-sm font-semibold text-gray-800 truncate">{doc.name}</p>
+                              <p className={`text-xs mt-0.5 ${doc.status === "verified" ? "text-green-600" : doc.status === "rejected" ? "text-red-600" : "text-gray-400"}`}>
+                                {doc.status === "pending" ? "Click to review →" : doc.status}
+                              </p>
+                            </button>
+                          ))}
                         </div>
                       )}
-                    </div>
-                  </SectionCollapsible>
-                )}
+                    </motion.div>
+                  )}
 
-                {/* Documents */}
-                {docs.length > 0 && (
-                  <SectionCollapsible icon={FileText} iconBg="bg-green-50 text-green-600" title="Documents" count={docs.length} expanded={expanded.documents} onToggle={() => toggle("documents")}>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                      {docs.map((doc: any) => (
-                        <button key={doc.id} onClick={() => setSelectedDoc(doc)}
-                          className={`p-3 border rounded-xl text-left transition-all hover:shadow-sm group ${doc.status === "verified" ? "border-green-200 bg-green-50/40" : doc.status === "rejected" ? "border-red-200 bg-red-50/40" : "border-gray-200 hover:border-blue-300 hover:bg-blue-50/20"}`}>
-                          <div className="flex items-center justify-between mb-1.5">
-                            <div className="p-1.5 bg-white rounded-lg border border-gray-100"><FileText className="w-4 h-4 text-blue-500" /></div>
-                            {doc.status === "verified" && <CheckCircle className="w-4 h-4 text-green-500" />}
-                            {doc.status === "rejected" && <XCircle className="w-4 h-4 text-red-500" />}
-                            {doc.status === "pending" && <Clock className="w-4 h-4 text-amber-400" />}
-                          </div>
-                          <p className="text-sm font-semibold text-gray-800 truncate">{doc.name}</p>
-                          <p className={`text-xs mt-0.5 ${doc.status === "verified" ? "text-green-600" : doc.status === "rejected" ? "text-red-600" : "text-gray-400"}`}>
-                            {doc.status === "pending" ? "Click to review →" : doc.status}
-                          </p>
-                        </button>
-                      ))}
-                    </div>
-                  </SectionCollapsible>
-                )}
-
-                {/* Activity Log */}
-                <SectionCollapsible icon={Activity} iconBg="bg-violet-50 text-violet-600" title="Activity Log" count={activityLog.length} expanded={expanded.activity} onToggle={() => toggle("activity")}>
-                  {activityLog.length === 0
-                    ? <p className="text-sm text-gray-400 py-2 text-center">No activity recorded yet.</p>
-                    : <div className="relative pt-1">
-                        <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-100" />
-                        <div className="space-y-3">
-                          {activityLog.map((e, i) => {
-                            const Icon = e.icon;
-                            return (
-                              <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }} className="relative flex items-start gap-3 pl-1">
-                                <div className={`relative z-10 w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${e.cls}`}><Icon className="w-3.5 h-3.5" /></div>
-                                <div className="pt-0.5">
-                                  <p className="text-sm font-semibold text-gray-800 capitalize">{e.label}</p>
-                                  <p className="text-xs text-gray-400">{fmtDT(e.date)}</p>
-                                </div>
-                              </motion.div>
-                            );
-                          })}
+                  {activeTab === "activity" && (
+                    <motion.div
+                      key="activity-tab"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="space-y-4"
+                    >
+                      {/* Activity Log */}
+                      <SectionCollapsible icon={Activity} iconBg="bg-violet-50 text-violet-600" title="Activity Log" count={activityLog.length} expanded={expanded.activity} onToggle={() => toggle("activity")}>
+                        {activityLog.length === 0
+                          ? <p className="text-sm text-gray-400 py-2 text-center">No activity recorded yet.</p>
+                          : <div className="relative pt-1">
+                              <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-100" />
+                              <div className="space-y-3">
+                                {activityLog.map((e, i) => {
+                                  const Icon = e.icon;
+                                  return (
+                                    <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }} className="relative flex items-start gap-3 pl-1">
+                                      <div className={`relative z-10 w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${e.cls}`}><Icon className="w-3.5 h-3.5" /></div>
+                                      <div className="pt-0.5">
+                                        <p className="text-sm font-semibold text-gray-800 capitalize">{e.label}</p>
+                                        <p className="text-xs text-gray-400">{fmtDT(e.date)}</p>
+                                      </div>
+                                    </motion.div>
+                                  );
+                                })}
+                              </div>
+                            </div>}
+                      </SectionCollapsible>
+                    </motion.div>
+                  )}
+                  {activeTab === "finalize" && (
+                    <motion.div
+                      key="finalize-tab"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="space-y-4"
+                    >
+                      {/* ═══ SECTION: FINALIZATION PANEL (DEDICATED TAB) ═══ */}
+                      <div className="bg-rose-50/30 border border-rose-100 rounded-3xl p-1">
+                        <ShelterFinalizationPanel 
+                          applicationId={application._id} 
+                          application={application} 
+                          onRefresh={loadApplication} 
+                        />
+                      </div>
+                      
+                      <div className="p-6 bg-white border border-gray-100 rounded-3xl shadow-sm text-center">
+                        <div className="w-12 h-12 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                          <CheckSquare className="w-6 h-6" />
                         </div>
-                      </div>}
-                </SectionCollapsible>
+                        <h3 className="text-lg font-bold text-gray-800 mb-2">Ready to close the adoption?</h3>
+                        <p className="text-sm text-gray-500 max-w-md mx-auto">
+                          Use this area to generate the digital contract, process final payments, and record the physical handover of the pet to their new family.
+                        </p>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
               {/* ════ SECTION D: DECISION CONTROLS & AUDIT TRAIL ════ */}

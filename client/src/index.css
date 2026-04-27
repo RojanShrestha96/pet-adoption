@@ -148,53 +148,6 @@ body {
 
 /* ============================================ */
 
-/* THEME 4: GLASSMORPHISM (Gradient + Frosted Glass) */
-
-/* ============================================ */
-
-/* ============================================ */
-
-/* THEME 4: ROYAL LAVENDER (Deep Purple + Gold Accents) */
-
-/* ============================================ */
-
-.theme-royal {
-  /* Primary Colors - Rich & Regal */
-  --color-primary: #6a4c93;
-  --color-primary-dark: #553c7b;
-  --color-secondary: #b590e8;
-  --color-accent: #ffd700;
-  /* Backgrounds - Slightly darker, premium feel */
-  --color-background: #f4f1fa;
-  --color-surface: #ebe5f5;
-  --color-card: #ffffff;
-  /* Text */
-  --color-text: #2d2438;
-  --color-text-light: #6d6478;
-  /* Borders */
-  --color-border: #dbcdee;
-  /* Status Colors */
-  --color-success: #06d6a0;
-  --color-error: #ef476f;
-  --color-warning: #ffd166;
-  --color-info: #118ab2;
-  /* Typography */
-  --font-heading: "Poppins", sans-serif;
-  --font-body: "Manrope", sans-serif;
-  /* Spacing */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
-  /* Shadows - Sharp & Defined */
-  --shadow-sm: 0 2px 4px rgba(106, 76, 147, 0.05);
-  --shadow-md: 0 6px 12px rgba(106, 76, 147, 0.1);
-  --shadow-lg: 0 12px 24px rgba(106, 76, 147, 0.15);
-  --shadow-xl: 0 20px 40px rgba(106, 76, 147, 0.2);
-}
-
-/* ============================================ */
-
 /* APPLY THEME VARIABLES TO BODY */
 
 /* ============================================ */
@@ -283,10 +236,6 @@ h6 {
 }
 
 
-.theme-royal * {
-  transition-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-
 /* ============================================ */
 
 /* SCROLLBAR STYLING */
@@ -371,7 +320,16 @@ h6 {
   background-clip: text;
 }
 
-/* ============================================ */
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
 
 /* ANIMATION KEYFRAMES */
 

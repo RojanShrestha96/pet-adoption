@@ -15,7 +15,7 @@ import {
 import { useAuth } from "../../contexts/AuthContext";
 import { LogoutConfirmModal } from "../common/LogoutConfirmModal";
 
-type TabType = "dashboard" | "platform_users" | "users" | "shelters" | "donations" | "reports" | "logs" | "settings" | "security";
+type TabType = "dashboard" | "platform_users" | "users" | "shelters" | "donations" | "logs" | "settings";
 
 interface AdminSidebarProps {
     activeTab?: TabType;
@@ -67,11 +67,6 @@ export function AdminSidebar({ activeTab = "dashboard", setActiveTab }: AdminSid
       label: "Donations",
     },
     {
-      id: "reports" as TabType,
-      icon: Flag,
-      label: "Moderation",
-    },
-    {
       id: "logs" as TabType,
       icon: FileText,
       label: "Audit Logs",
@@ -80,11 +75,6 @@ export function AdminSidebar({ activeTab = "dashboard", setActiveTab }: AdminSid
       id: "settings" as TabType,
       icon: Settings,
       label: "Settings",
-    },
-    {
-      id: "security" as TabType,
-      icon: Shield,
-      label: "Security",
     },
   ];
 

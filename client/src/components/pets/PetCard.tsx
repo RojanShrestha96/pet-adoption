@@ -7,7 +7,9 @@ import { Card } from "../ui/Card";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { FavouriteButton } from "./FavouriteButton";
+import { PetDocBadgeInline } from "./PetDocBadge";
 import type { Pet } from "../../data/mockData";
+import { formatAge } from "../../utils/ageUtils";
 export interface PetCardProps {
   pet: Pet;
   index?: number;
@@ -84,11 +86,21 @@ export function PetCard({
                   {pet.breed}
                 </p>
               </div>
-              <Badge variant={healthVariant[pet.healthStatus]}>
-                {pet.healthStatus === "special-needs"
-                  ? "Special Needs"
-                  : pet.healthStatus}
-              </Badge>
+              <div className="flex flex-col items-end gap-2">
+                <Badge variant={healthVariant[pet.healthStatus]}>
+                  {pet.healthStatus === "special-needs"
+                    ? "Special Needs"
+                    : pet.medical?.vaccinationStatus === "partially-vaccinated"
+                    ? "Partially Vax"
+                    : pet.healthStatus}
+                </Badge>
+                <PetDocBadgeInline 
+                  isVaccinated={pet.medical?.isVaccinated}
+                  vaccinationStatus={pet.medical?.vaccinationStatus}
+                  isMicrochipped={pet.medical?.isMicrochipped}
+                  isNeutered={pet.medical?.isNeutered}
+                />
+              </div>
             </div>
 
             <div
@@ -97,7 +109,7 @@ export function PetCard({
                 color: "var(--color-text-light)",
               }}
             >
-              <span>{pet.age}</span>
+              <span>{formatAge(pet.age)}</span>
               <span>•</span>
               <span className="capitalize">{pet.size}</span>
               <span>•</span>

@@ -82,9 +82,7 @@ export function ThemeSwitcher() {
                           background:
                             theme.name === "friendly"
                               ? "#D4745C"
-                              : theme.name === "bold"
-                              ? "#6C5CE7"
-                              : "#6A4C93",
+                              : "#6C5CE7",
                         }}
                       />
                       <div
@@ -93,9 +91,7 @@ export function ThemeSwitcher() {
                           background:
                             theme.name === "friendly"
                               ? "#7C9885"
-                              : theme.name === "bold"
-                              ? "#FF6B9D"
-                              : "#FFD700",
+                              : "#FF6B9D",
                         }}
                       />
                     </div>

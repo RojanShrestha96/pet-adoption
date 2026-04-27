@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
-import { Mail, Lock, PawPrint } from "lucide-react";
+import { Mail, Lock, PawPrint, Eye, EyeOff } from "lucide-react";
 import { Card } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
@@ -12,7 +12,9 @@ import { useAuth } from "../../contexts/AuthContext";
 export function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { login } = useAuth();
@@ -38,8 +40,8 @@ export function LoginPage() {
 
       if (response.status === 200) {
         showToast("Login successful! Welcome back.", "success");
-        // Update auth context (this also stores to localStorage)
-        login(response.data.user, response.data.token);
+        // Update auth context (this stores to localStorage or sessionStorage based on rememberMe)
+        login(response.data.user, response.data.token, rememberMe);
 
         // Redirect based on user type
         if (response.data.user.type === "shelter") {
@@ -211,12 +213,25 @@ export function LoginPage() {
               />
 
               <Input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 label="Password"
                 placeholder="Enter your password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 icon={<Lock className="w-5 h-5" />}
+                rightElement={
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="p-1 hover:bg-[var(--color-surface)] rounded-md transition-colors"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
+                  </button>
+                }
                 fullWidth
                 required
               />
@@ -225,6 +240,8 @@ export function LoginPage() {
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
                     className="w-4 h-4 rounded focus:ring-2"
                     style={{
                       accentColor: "var(--color-primary)",

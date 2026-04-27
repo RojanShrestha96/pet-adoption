@@ -7,11 +7,9 @@ import {
   MailIcon,
   ClockIcon,
   HeartIcon,
-  UsersIcon,
   PawPrintIcon,
   CalendarIcon,
   MessageSquareIcon,
-  StarIcon,
   ChevronRightIcon,
   DogIcon,
   CatIcon,
@@ -24,6 +22,7 @@ import { Card } from "../../components/ui/Card";
 import { Badge } from "../../components/ui/Badge";
 import { ShelterMap } from "../../components/shelters/ShelterMap";
 import { LoadingSpinner } from "../../components/common/LoadingSpinner";
+import { formatAge } from "../../utils/ageUtils";
 
 export function ShelterProfilePage() {
   const { id } = useParams<{ id: string }>();
@@ -126,24 +125,7 @@ export function ShelterProfilePage() {
     );
   }
 
-  const stats = [
-    {
-      label: "Pets Available",
-      value: shelter.stats?.totalPets || 12,
-      icon: <PawPrintIcon className="w-5 h-5" />,
-    },
-    {
-      label: "Pets Adopted",
-      value: shelter.stats?.adoptions || 85,
-      icon: <HeartIcon className="w-5 h-5" />,
-    },
-    { label: "Volunteers", value: 24, icon: <UsersIcon className="w-5 h-5" /> }, // Mock for now
-    {
-      label: "Rating",
-      value: shelter.rating || "New",
-      icon: <StarIcon className="w-5 h-5" />,
-    },
-  ];
+
 
   // Simplify address display: preferably City, State or first 3 parts of long address
   const getDisplayAddress = () => {
@@ -376,40 +358,7 @@ export function ShelterProfilePage() {
               </Card>
             </motion.div>
 
-            {/* Stats Section */}
-            <motion.div
-              variants={itemVariants}
-              className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8"
-            >
-              {stats.map((stat, index) => (
-                <Card
-                  key={index}
-                  className="p-4 md:p-6 text-center border border-[var(--color-border)]"
-                >
-                  <div
-                    className="inline-flex items-center justify-center w-12 h-12 rounded-full mb-3"
-                    style={{
-                      background: "var(--color-surface)",
-                      color: "var(--color-primary)",
-                    }}
-                  >
-                    {stat.icon}
-                  </div>
-                  <div
-                    className="text-2xl md:text-3xl font-bold mb-1"
-                    style={{ color: "var(--color-text)" }}
-                  >
-                    {stat.value}
-                  </div>
-                  <div
-                    className="text-sm"
-                    style={{ color: "var(--color-text-light)" }}
-                  >
-                    {stat.label}
-                  </div>
-                </Card>
-              ))}
-            </motion.div>
+
 
             <div className="grid lg:grid-cols-3 gap-8">
               {/* Main Content */}
@@ -570,7 +519,7 @@ export function ShelterProfilePage() {
                                     className="text-sm"
                                     style={{ color: "var(--color-text-light)" }}
                                   >
-                                    {pet.breed} • {pet.age}
+                                    {pet.breed} • {formatAge(pet.age)}
                                   </p>
                                 </div>
                               </div>

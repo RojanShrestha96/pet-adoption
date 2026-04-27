@@ -257,6 +257,7 @@ export function DonatePage() {
   const [donorName, setDonorName] = useState("");
   const [donorEmail, setDonorEmail] = useState("");
   const [loading, setLoading] = useState(false);
+  const [amountError, setAmountError] = useState<string | null>(null);
 
   // UI States
   const [currentDonorIndex, setCurrentDonorIndex] = useState(0);
@@ -356,8 +357,24 @@ export function DonatePage() {
   }, [donorStories]);
 
   const handleDonate = () => {
-    const amount = selectedAmount || parseInt(customAmount);
-    if (amount) setShowFeedbackModal(true);
+    const amount = selectedAmount || (customAmount ? parseInt(customAmount) : 0);
+    
+    if (customAmount) {
+      const val = parseInt(customAmount);
+      if (val <= 0) {
+        setAmountError("Please enter an amount greater than 0");
+        return;
+      }
+      if (val > 10000) {
+        setAmountError("Maximum custom donation is Rs 10,000");
+        return;
+      }
+    }
+
+    if (amount) {
+      setAmountError(null);
+      setShowFeedbackModal(true);
+    }
   };
 
   const handlePayment = async () => {
@@ -579,13 +596,33 @@ export function DonatePage() {
                   type="number"
                   placeholder="e.g. 750"
                   value={customAmount}
-                  onChange={(e) => { setCustomAmount(e.target.value); setSelectedAmount(0); }}
-                  className="pl-16 text-2xl py-8 rounded-2xl border-2 border-gray-100 group-hover:border-[var(--color-primary)]/30 focus:border-[var(--color-primary)] transition-all bg-gray-50 focus:bg-white w-full shadow-inner"
+                  min="1"
+                  max="10000"
+                  onChange={(e) => { 
+                    const val = e.target.value;
+                    setCustomAmount(val); 
+                    setSelectedAmount(0);
+                    
+                    if (val && parseInt(val) > 10000) {
+                      setAmountError("Maximum custom donation is Rs 10,000");
+                    } else if (val && parseInt(val) <= 0) {
+                      setAmountError("Please enter an amount greater than 0");
+                    } else {
+                      setAmountError(null);
+                    }
+                  }}
+                  className={`pl-16 text-2xl py-8 rounded-2xl border-2 transition-all bg-gray-50 focus:bg-white w-full shadow-inner ${amountError ? "border-red-500 focus:border-red-500" : "border-gray-100 group-hover:border-[var(--color-primary)]/30 focus:border-[var(--color-primary)]"}`}
                   fullWidth
                   icon={<span className="font-bold text-xl text-gray-400 mr-2 border-r border-gray-200 pr-3 h-6 flex items-center">Rs</span>}
                 />
               </div>
-              <p className="text-sm text-gray-400 font-medium">Any amount helps save a life</p>
+              {amountError ? (
+                <p className="text-sm text-red-500 font-bold flex items-center gap-1.5 animate-bounce">
+                  <AlertTriangle className="w-3.5 h-3.5" /> {amountError}
+                </p>
+              ) : (
+                <p className="text-sm text-gray-400 font-medium">Any amount up to Rs 10,000 helps save a life</p>
+              )}
             </motion.div>
 
             <motion.div initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} className="bg-white rounded-[2rem] p-8 border border-[#60BB46] shadow-sm relative overflow-hidden group cursor-pointer hover:shadow-lg transition-all h-full bg-gradient-to-br from-white to-green-50/50">
@@ -623,7 +660,7 @@ export function DonatePage() {
               variant="primary"
               size="lg"
               onClick={handleDonate}
-              disabled={!(selectedAmount || customAmount) || user?.status === "suspended"}
+              disabled={!(selectedAmount || (customAmount && !amountError)) || user?.status === "suspended"}
               icon={user?.status === "suspended" ? <AlertTriangle className="w-6 h-6" /> : <Heart className="w-6 h-6" fill={(selectedAmount || customAmount) ? "white" : "none"} />}
               className="text-2xl py-8 px-16 rounded-full shadow-xl hover:shadow-[0_20px_40px_rgba(232,93,58,0.3)] hover:-translate-y-1 transition-all w-full md:w-auto font-bold"
             >

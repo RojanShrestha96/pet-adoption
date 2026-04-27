@@ -68,7 +68,7 @@ import { useToast } from "../../components/ui/Toast";
 
 import { AdminModerationAlert } from "../../components/admin/AdminModerationAlert";
 import { AdminDonations } from "../../components/admin/AdminDonations";
-type TabType = "dashboard" | "platform_users" | "users" | "shelters" | "donations" | "reports" | "logs" | "settings" | "security";
+type TabType = "dashboard" | "platform_users" | "users" | "shelters" | "donations" | "logs" | "settings";
 type ShelterFilterType = "all" | "verified" | "pending" | "suspended";
 type PetFilterType = "all" | "dog" | "cat" | "other";
 
@@ -91,6 +91,7 @@ export function AdminDashboard() {
   const [pendingPets, setPendingPets] = useState<any[]>([]);
   const [petModerationFilter, setPetModerationFilter] = useState<PetFilterType>('all');
   const [selectedModerationPet, setSelectedModerationPet] = useState<any>(null);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
 
   // Platform Users States
   const [platformUsers, setPlatformUsers] = useState<any[]>([]);
@@ -144,18 +145,6 @@ export function AdminDashboard() {
     }
   }, [user]);
 
-  const tabs = [
-    { id: "dashboard" as TabType, label: "Dashboard", icon: TrendingUp },
-    { id: "platform_users" as TabType, label: "Platform Users", icon: UserCheck },
-    { id: "users" as TabType, label: "Admin Users", icon: Users },
-    { id: "shelters" as TabType, label: "Shelters", icon: Building2 },
-    { id: "donations" as TabType, label: "Donations", icon: Heart },
-    { id: "reports" as TabType, label: "Moderation", icon: Flag },
-    { id: "logs" as TabType, label: "Audit Logs", icon: FileText },
-    { id: "settings" as TabType, label: "Settings", icon: SettingsIcon },
-    { id: "security" as TabType, label: "Security", icon: Shield },
-  ];
-
   // Fetch Data based on active tab
   useEffect(() => {
     if (!token) return;
@@ -197,6 +186,9 @@ export function AdminDashboard() {
           const petsRes = await api.get("/admin/moderation/pets");
           setPendingPets(petsRes.data);
           setPetModPage(1);
+        } else if (activeTab === "logs") {
+          const logsRes = await api.get("/admin/audit-logs");
+          setAuditLogs(logsRes.data);
         }
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -1163,24 +1155,33 @@ export function AdminDashboard() {
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                    {[
-                        { time: "Just now", admin: "You", action: "UPDATE", target: "Platform Settings", detail: "Updated notification preferences", type: "info" },
-                        { time: "10 mins ago", admin: "Super Admin", action: "DELETE", target: "User: john_doe", detail: "Deleted account due to violation", type: "danger" },
-                        { time: "2 hours ago", admin: " Moderator A", action: "VERIFY", target: "Shelter: Happy Paws", detail: "Approved verification request", type: "success" },
-                        { time: "5 hours ago", admin: "System", action: "BACKUP", target: "Database", detail: "Automated daily backup completed", type: "system" },
-                    ].map((log, i) => (
-                        <tr key={i} className="hover:bg-gray-50">
-                            <td className="py-3 px-4 text-gray-500 whitespace-nowrap">{log.time}</td>
-                            <td className="py-3 px-4 font-medium text-gray-900">{log.admin}</td>
+                    {auditLogs.map((log, i) => (
+                        <tr key={log._id || i} className="hover:bg-gray-50">
+                            <td className="py-3 px-4 text-gray-500 whitespace-nowrap">
+                              {new Date(log.createdAt).toLocaleString()}
+                            </td>
+                            <td className="py-3 px-4 font-medium text-gray-900">{log.adminName}</td>
                             <td className="py-3 px-4">
-                                <Badge variant={log.type === 'danger' ? 'error' : log.type === 'success' ? 'success' : 'neutral'}>
+                                <Badge variant={
+                                  log.type === 'danger' ? 'error' : 
+                                  log.type === 'success' ? 'success' : 
+                                  log.type === 'warning' ? 'warning' :
+                                  'neutral'
+                                }>
                                     {log.action}
                                 </Badge>
                             </td>
                             <td className="py-3 px-4 text-gray-600">{log.target}</td>
-                            <td className="py-3 px-4 text-gray-500">{log.detail}</td>
+                            <td className="py-3 px-4 text-gray-500">{log.details}</td>
                         </tr>
                     ))}
+                    {auditLogs.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="py-10 text-center text-gray-500">
+                          No audit logs found.
+                        </td>
+                      </tr>
+                    )}
                 </tbody>
             </table>
         </div>
@@ -1188,49 +1189,6 @@ export function AdminDashboard() {
     </div>
   );
 
-  const renderReports = () => (
-    <div className="space-y-6">
-        <div className="flex items-center justify-between">
-            <div>
-            <h2 className="text-2xl font-bold text-gray-900">Content Moderation</h2>
-            <p className="text-sm text-gray-500 mt-1">
-                Review and act on user-reported content
-            </p>
-            </div>
-            <div className="flex gap-2">
-                <Badge variant="warning">3 Pending</Badge>
-                <Badge variant="success">12 Resolved Today</Badge>
-            </div>
-        </div>
-
-        <div className="space-y-4">
-             {[
-                { type: "Pet Listing", reason: "Misleading Information", reporter: "user123", target: "Golden Retriever (Max)", time: "2 hours ago" },
-                { type: "Shelter Profile", reason: "Suspicious Activity", reporter: "anon", target: "City Rescue Center", time: "5 hours ago" },
-                { type: "User Comment", reason: "Harassment", reporter: "sarah_k", target: "Comment ID #8823", time: "1 day ago" },
-             ].map((report, i) => (
-                <Card key={i} className="p-4 border-l-4 border-l-red-500 hover:shadow-md transition-shadow">
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <div className="flex items-center gap-2 mb-2">
-                                <Badge variant="error">Reported</Badge>
-                                <span className="text-gray-500 text-xs">{report.time}</span>
-                            </div>
-                            <h3 className="font-bold text-gray-900 mb-1">{report.type}: {report.target}</h3>
-                            <p className="text-sm text-gray-600 mb-2"><span className="font-semibold">Reason:</span> {report.reason}</p>
-                            <p className="text-xs text-gray-400">Reported by: {report.reporter}</p>
-                        </div>
-                        <div className="flex flex-col gap-2">
-                            <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50">Delete Content</Button>
-                            <Button size="sm" variant="ghost">Ignore</Button>
-                        </div>
-                    </div>
-                </Card>
-             ))}
-             <p className="text-center text-gray-400 text-sm py-4">End of moderation queue</p>
-        </div>
-    </div>
-  );
 
   const renderSettings = () => (
     <div className="space-y-6 max-w-4xl">
@@ -1281,64 +1239,9 @@ export function AdminDashboard() {
         </form>
       </Card>
 
-      <Card padding="lg">
-         <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-            <Bell className="w-5 h-5 text-gray-500" />
-            Notification Preferences
-         </h3>
-         <div className="space-y-4">
-            {[
-                { label: "Email Notifications for New Shelters", desc: "Get notified when a new shelter registers" },
-                { label: "System Alerts", desc: "Receive critical system health alerts" },
-                { label: "Weekly Reports", desc: "Receive a weekly summary of platform activity" }
-            ].map((item, i) => (
-                <div key={i} className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0 hover:bg-gray-50 px-2 rounded-lg transition-colors">
-                    <div>
-                        <p className="font-medium text-gray-900">{item.label}</p>
-                        <p className="text-xs text-gray-500">{item.desc}</p>
-                    </div>
-                    {/* Mock Toggle */}
-                    <div className="w-11 h-6 bg-red-500 rounded-full relative cursor-pointer">
-                        <div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full shadow-sm"></div>
-                    </div>
-                </div>
-            ))}
-         </div>
-      </Card>
 
-      <Card padding="lg">
-         <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-            <SettingsIcon className="w-5 h-5 text-gray-500" />
-            System Features
-         </h3>
-         <div className="space-y-4">
-              <div className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0 hover:bg-gray-50 px-2 rounded-lg transition-colors">
-                  <div>
-                      <p className="font-medium text-gray-900">Compatibility Intelligence</p>
-                      <p className="text-xs text-gray-500">Enable compatability matching scores between adopters and pets.</p>
-                  </div>
-                  <div 
-                      onClick={() => handleToggleSetting("compatibilityIntelligenceEnabled", !settings.compatibilityIntelligenceEnabled)}
-                      className={`w-11 h-6 rounded-full relative cursor-pointer transition-colors ${settings.compatibilityIntelligenceEnabled ? "bg-green-500" : "bg-gray-300"}`}
-                  >
-                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${settings.compatibilityIntelligenceEnabled ? "translate-x-6 right-auto" : "translate-x-1 left-0"}`}></div>
-                  </div>
-              </div>
-         </div>
-      </Card>
-    </div>
-  );
-
-  const renderSecurity = () => (
-    <div className="space-y-6 max-w-4xl">
-       <div className="mb-6">
-           <h2 className="text-2xl font-bold text-gray-900">Security & Authentication</h2>
-           <p className="text-gray-500">Manage security settings and monitor login activity</p>
-        </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card padding="lg">
-             <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+       <Card padding="lg">
+            <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <Key className="w-5 h-5 text-gray-500" />
                 Change Password
              </h3>
@@ -1374,91 +1277,6 @@ export function AdminDashboard() {
                 </div>
              </form>
         </Card>
-
-        <div className="space-y-6">
-            <Card padding="lg">
-                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                   <Shield className="w-5 h-5 text-gray-500" />
-                   Two-Factor Authentication
-                </h3>
-                <p className="text-sm text-gray-500 mb-4">
-                    Add an extra layer of security to your account by enabling 2FA.
-                </p>
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-white rounded-lg shadow-sm text-gray-400">
-                             <Smartphone className="w-5 h-5" />
-                        </div>
-                        <div>
-                            <p className="font-medium text-gray-900">Text Message (SMS)</p>
-                            <p className="text-xs text-gray-500">Not configured</p>
-                        </div>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={() => showToast("2FA setup not available in development", "info")}>
-                        Enable
-                    </Button>
-                </div>
-            </Card>
-
-             <Card padding="lg" className="bg-red-50 border-red-100">
-                <h3 className="text-lg font-bold text-red-900 mb-2 flex items-center gap-2">
-                   <AlertTriangle className="w-5 h-5 text-red-600" />
-                   Danger Zone
-                </h3>
-                <p className="text-sm text-red-700/80 mb-4">
-                    Actions here can have irreversible consequences.
-                </p>
-                <Button 
-                    variant="outline" 
-                    className="w-full border-red-200 text-red-600 hover:bg-red-100"
-                    onClick={() => {
-                        window.confirm("Are you sure you want to delete your account? This action cannot be undone.") && 
-                        showToast("Account deletion requires Super Admin approval", "error");
-                    }}
-                >
-                    Delete My Account
-                </Button>
-            </Card>
-        </div>
-      </div>
-
-      <Card padding="lg">
-        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-           <Activity className="w-5 h-5 text-gray-500" />
-           Recent Login Activity
-        </h3>
-        <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-                <thead>
-                    <tr className="text-left text-gray-500 border-b border-gray-100">
-                        <th className="pb-3 font-medium">Device</th>
-                        <th className="pb-3 font-medium">Location</th>
-                        <th className="pb-3 font-medium">IP Address</th>
-                        <th className="pb-3 font-medium text-right">Time</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                    {[
-                        { device: "Chrome / Windows 11", location: "Kathmandu, Nepal", ip: "192.168.1.1", time: "Active now" },
-                        { device: "Safari / iPhone 13", location: "Kathmandu, Nepal", ip: "192.168.1.5", time: "2 hours ago" },
-                        { device: "Firefox / Windows 10", location: "Lalitpur, Nepal", ip: "10.0.0.45", time: "Yesterday" },
-                    ].map((log, i) => (
-                        <tr key={i}>
-                            <td className="py-3 flex items-center gap-2">
-                                {log.device.includes("iPhone") ? <Smartphone className="w-4 h-4 text-gray-400" /> : <Globe className="w-4 h-4 text-gray-400" />}
-                                <span className="text-gray-900">{log.device}</span>
-                            </td>
-                            <td className="py-3 text-gray-600">{log.location}</td>
-                            <td className="py-3 text-gray-500 font-mono text-xs">{log.ip}</td>
-                            <td className="py-3 text-right">
-                                <Badge variant={i === 0 ? "success" : "neutral"}>{log.time}</Badge>
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
-      </Card>
     </div>
   );
 
@@ -1498,26 +1316,6 @@ export function AdminDashboard() {
           </div>
         </header>
 
-        {/* Tabs */}
-        <div className="bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8">
-          <nav className="flex gap-1 overflow-x-auto">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors whitespace-nowrap ${
-                  activeTab === tab.id
-                    ? "border-red-500 text-red-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                <tab.icon className="w-4 h-4" />
-                <span className="font-medium text-sm">{tab.label}</span>
-              </button>
-            ))}
-          </nav>
-        </div>
-
         {/* Main Content */}
         <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
           <div className="max-w-7xl mx-auto">
@@ -1532,10 +1330,8 @@ export function AdminDashboard() {
                 {activeTab === "users" && renderAdminUsers()}
                 {activeTab === "shelters" && renderShelters()}
                 {activeTab === "donations" && renderDonations()}
-                {activeTab === "reports" && renderReports()}
                 {activeTab === "logs" && renderAuditLogs()}
                 {activeTab === "settings" && renderSettings()}
-                {activeTab === "security" && renderSecurity()}
                 </>
             )}
           </div>

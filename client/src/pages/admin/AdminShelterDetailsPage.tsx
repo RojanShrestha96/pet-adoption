@@ -9,6 +9,7 @@ import { Button } from "../../components/ui/Button";
 import { LoadingSpinner } from "../../components/common/LoadingSpinner";
 import { ConfirmationDialog } from "../../components/common/ConfirmationDialog";
 import { AdminSidebar } from "../../components/layout/AdminSidebar";
+import { formatAge } from "../../utils/ageUtils";
 import {
   ArrowLeft,
   Mail,
@@ -24,7 +25,9 @@ import {
   ExternalLink,
   AlertTriangle,
   Check,
-  Building2
+  Building2,
+  Search,
+  Filter
 } from "lucide-react";
 
 interface Shelter {
@@ -58,7 +61,7 @@ interface Pet {
     name: string;
     species: string;
     breed: string;
-    age: string;
+    age: { years: number; months: number };
     gender: string;
     adoptionStatus: string;
     reviewStatus: string;
@@ -87,6 +90,10 @@ export function AdminShelterDetailsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPet, setSelectedPet] = useState<Pet | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // Search & Filter State
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterReviewStatus, setFilterReviewStatus] = useState<"all" | "pending" | "approved" | "rejected">("all");
   
   // Confirmation Dialog States
   const [showApproveConfirm, setShowApproveConfirm] = useState(false);
@@ -175,6 +182,46 @@ export function AdminShelterDetailsPage() {
       setIsModalOpen(false);
       setSelectedPet(null);
   };
+
+  const viewDocument = (url: string) => {
+    if (!url) return;
+    
+    // Handle Cloudinary protocol-less URLs (e.g. res.cloudinary.com/...)
+    let finalUrl = url;
+    if (!url.startsWith('http') && !url.startsWith('data:')) {
+      finalUrl = `https://${url}`;
+    }
+
+    // Handle large Base64 strings which are blocked in target="_blank" by modern browsers
+    if (url.startsWith('data:')) {
+      try {
+        const parts = url.split(',');
+        const mime = parts[0].match(/:(.*?);/)?.[1] || 'application/octet-stream';
+        const b64 = parts[1];
+        const bstr = atob(b64);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while(n--) u8arr[n] = bstr.charCodeAt(n);
+        const blob = new Blob([u8arr], {type: mime});
+        finalUrl = URL.createObjectURL(blob);
+        
+        // Auto-cleanup object URL after some time
+        setTimeout(() => URL.revokeObjectURL(finalUrl), 60000);
+      } catch (e) {
+        console.error("Failed to process document URL:", e);
+      }
+    }
+    
+    window.open(finalUrl, '_blank');
+  };
+
+  const filteredPets = pets.filter((pet) => {
+    const matchesSearch = pet.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          (pet.breed || pet.species).toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesReviewStatus = filterReviewStatus === "all" || pet.reviewStatus === filterReviewStatus;
+    
+    return matchesSearch && matchesReviewStatus;
+  });
 
   if (isLoading) {
     return (
@@ -310,15 +357,13 @@ export function AdminShelterDetailsPage() {
                                         <p className="text-xs text-gray-500 uppercase">{doc.type}</p>
                                     </div>
                                 </div>
-                                <a 
-                                    href={doc.url} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
+                                <button 
+                                    onClick={() => viewDocument(doc.url)} 
                                     className="ml-2 p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                     title="View Document"
                                 >
                                     <ExternalLink className="w-4 h-4" />
-                                </a>
+                                </button>
                             </div>
                         ))}
                     </div>
@@ -350,7 +395,39 @@ export function AdminShelterDetailsPage() {
 
         {/* Pets Management */}
         <div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Listed Pets</h2>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Listed Pets</h2>
+                
+                <div className="flex flex-col sm:flex-row gap-3">
+                    {/* Search */}
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input
+                            type="text"
+                            placeholder="Search pets..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full sm:w-64 pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] bg-white"
+                        />
+                    </div>
+                    
+                    {/* Review Status Filter */}
+                    <div className="relative">
+                        <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                        <select
+                            value={filterReviewStatus}
+                            onChange={(e) => setFilterReviewStatus(e.target.value as any)}
+                            className="w-full sm:w-48 pl-10 pr-15 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] bg-white appearance-none cursor-pointer"
+                        >
+                            <option value="all">All Review Statuses</option>
+                            <option value="pending">Pending</option>
+                            <option value="approved">Approved</option>
+                            <option value="rejected">Rejected</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
             <Card className="overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full">
@@ -364,7 +441,7 @@ export function AdminShelterDetailsPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {pets.map((pet) => (
+                            {filteredPets.map((pet) => (
                                 <tr key={pet._id} className="hover:bg-gray-50">
                                     <td className="py-4 px-6">
                                         <div className="flex items-center gap-3">
@@ -381,7 +458,7 @@ export function AdminShelterDetailsPage() {
                                             )}
                                             <div>
                                                 <p className="font-medium text-gray-900">{pet.name}</p>
-                                                <p className="text-sm text-gray-500">{pet.breed || pet.species} • {pet.age} old</p>
+                                                <p className="text-sm text-gray-500">{pet.breed || pet.species} • {formatAge(pet.age)} old</p>
                                             </div>
                                         </div>
                                     </td>
@@ -425,7 +502,7 @@ export function AdminShelterDetailsPage() {
                                     </td>
                                 </tr>
                             ))}
-                            {pets.length === 0 && (
+                            {filteredPets.length === 0 && (
                                 <tr>
                                     <td colSpan={5} className="py-8 text-center text-gray-500">
                                         No pets listed yet.
@@ -470,7 +547,7 @@ export function AdminShelterDetailsPage() {
                 )}
                 <div>
                   <h3 className="text-xl font-bold text-gray-900">{selectedPet.name}</h3>
-                  <p className="text-gray-500">{selectedPet.breed || selectedPet.species} • {selectedPet.age}</p>
+                  <p className="text-gray-500">{selectedPet.breed || selectedPet.species} • {formatAge(selectedPet.age)}</p>
                   <p className="text-gray-500 capitalize">{selectedPet.gender}</p>
                 </div>
               </div>
@@ -535,14 +612,12 @@ export function AdminShelterDetailsPage() {
                                       <FileText className="w-4 h-4 text-blue-500" />
                                       <span className="text-sm font-medium">Medical Document {idx + 1}</span>
                                   </div>
-                                  <a 
-                                      href={doc} 
-                                      target="_blank" 
-                                      rel="noopener noreferrer"
+                                  <button 
+                                      onClick={() => viewDocument(doc)} 
                                       className="text-blue-600 hover:underline text-sm flex items-center gap-1"
                                   >
                                       View <ExternalLink className="w-3 h-3" />
-                                  </a>
+                                  </button>
                               </div>
                           ))}
                       </div>

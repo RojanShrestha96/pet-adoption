@@ -3,10 +3,29 @@ import { HeartIcon, PawPrintIcon, QuoteIcon, Building2, Users } from "lucide-rea
 import { Navbar } from "../../components/layout/Navbar";
 import { Footer } from "../../components/layout/Footer";
 import { Button } from "../../components/ui/Button";
-import { successStories } from "../../data/successStories";
+import { successStories as staticStories } from "../../data/successStories";
 import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import axios from "axios";
 
 export function SuccessStoriesPage() {
+  const [stories, setStories] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStories = async () => {
+      try {
+        const res = await axios.get("http://localhost:5000/api/stories");
+        setStories(res.data);
+      } catch (err) {
+        console.error("Failed to fetch stories", err);
+        setStories([]); // Don't use mock data
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchStories();
+  }, []);
 
 
   return (
@@ -122,86 +141,93 @@ export function SuccessStoriesPage() {
         <section className="py-24 bg-[#faf9f6]">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="space-y-24">
-              {successStories.map((story, index) => (
-                <motion.div 
-                  key={story.id} 
-                  initial={{ opacity: 0, y: 40 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: "-100px" }}
-                  transition={{ duration: 0.7 }}
-                  className={`flex flex-col md:flex-row items-center gap-12 ${
-                    index % 2 === 1 ? "md:flex-row-reverse" : ""
-                  }`}
-                >
-                  {/* Image with Decorative Element */}
-                  <div className="w-full md:w-1/2 relative group">
-                    <div 
-                      className="absolute -inset-4 bg-[var(--color-surface)] rounded-[32px] rotate-2 transition-transform group-hover:rotate-1" 
-                    />
-                    <div className="relative aspect-[4/3] rounded-[24px] overflow-hidden shadow-2xl">
-                      <img
-                        src={story.petImage}
-                        alt={story.petName}
-                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+              {isLoading ? (
+                <div className="flex justify-center py-20">
+                  <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[var(--color-primary)]"></div>
+                </div>
+              ) : stories.length > 0 ? (
+                stories.map((story, index) => (
+                  <motion.div 
+                    key={story.id} 
+                    initial={{ opacity: 0, y: 40 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: "-100px" }}
+                    transition={{ duration: 0.7 }}
+                    className={`flex flex-col md:flex-row items-center gap-12 ${
+                      index % 2 === 1 ? "md:flex-row-reverse" : ""
+                    }`}
+                  >
+                    {/* Image with Decorative Element */}
+                    <div className="w-full md:w-1/2 relative group">
+                      <div 
+                        className="absolute -inset-4 bg-[var(--color-surface)] rounded-[32px] rotate-2 transition-transform group-hover:rotate-1" 
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
-                      
-                      {/* Name Plate */}
-                      <div className="absolute bottom-6 left-6 text-white">
-                        <h3 className="text-2xl font-bold leading-none mb-1">{story.petName}</h3>
-                        <p className="text-sm text-white/80">{story.petBreed}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Content Section */}
-                  <div className="w-full md:w-1/2">
-                    <div className="flex items-center gap-3 mb-6">
-                      <div className="h-[1px] w-12 bg-[var(--color-primary)] opacity-40" />
-                      <span className="text-sm font-bold uppercase tracking-widest text-[var(--color-primary)]">
-                        {story.adoptionDate}
-                      </span>
-                    </div>
-
-                    <QuoteIcon 
-                      className="w-10 h-10 text-[var(--color-primary)] opacity-20 mb-4" 
-                    />
-                    
-                    <h2 className="text-3xl font-bold mb-6 text-[var(--color-text)] leading-tight">
-                      {index === 0 ? "Finding the perfect match was easier than we thought." : 
-                       index === 1 ? "He wasn't just a pet, he was the missing piece." :
-                       index === 2 ? "A second chance that changed everything." : 
-                       "Welcome home, finally."}
-                    </h2>
-
-                    <p className="text-lg text-[var(--color-text-light)] mb-8 leading-relaxed italic border-l-4 border-[var(--color-surface)] pl-6">
-                      "{story.quote}"
-                    </p>
-
-                    <p className="text-[var(--color-text-light)] mb-10 leading-relaxed font-medium">
-                      {story.story}
-                    </p>
-
-                    <div className="flex items-center justify-between pt-8 border-t border-[var(--color-border)]">
-                      <div className="flex items-center gap-4">
-                        <img 
-                          src={story.ownerImage} 
-                          alt={story.adopterName} 
-                          className="w-14 h-14 rounded-full object-cover border-2 border-white shadow-md"
+                      <div className="relative aspect-[4/3] rounded-[24px] overflow-hidden shadow-2xl">
+                        <img
+                          src={story.petImage}
+                          alt={story.petName}
+                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                         />
-                        <div>
-                          <p className="font-bold text-[var(--color-text)]">{story.adopterName}</p>
-                          <p className="text-sm text-[var(--color-text-light)]">Proud Parent in {story.location}</p>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+                        
+                        {/* Name Plate */}
+                        <div className="absolute bottom-6 left-6 text-white">
+                          <h3 className="text-2xl font-bold leading-none mb-1">{story.petName}</h3>
+                          <p className="text-sm text-white/80">{story.petBreed}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5 px-4 py-2 bg-[var(--color-surface)] rounded-full text-[var(--color-primary)]">
-                        <HeartIcon className="w-4 h-4 fill-current" />
-                        <span className="text-xs font-bold uppercase tracking-wider">Adopted</span>
+                    </div>
+
+                    {/* Content Section */}
+                    <div className="w-full md:w-1/2">
+                      <div className="flex items-center gap-3 mb-6">
+                        <div className="h-[1px] w-12 bg-[var(--color-primary)] opacity-40" />
+                        <span className="text-sm font-bold uppercase tracking-widest text-[var(--color-primary)]">
+                          {story.adoptionDate}
+                        </span>
+                      </div>
+
+                      <QuoteIcon 
+                        className="w-10 h-10 text-[var(--color-primary)] opacity-20 mb-4" 
+                      />
+                      
+                      <h2 className="text-3xl font-bold mb-6 text-[var(--color-text)] leading-tight">
+                        {story.story.split('.')[0]}.
+                      </h2>
+
+                      <p className="text-lg text-[var(--color-text-light)] mb-8 leading-relaxed italic border-l-4 border-[var(--color-surface)] pl-6">
+                        "{story.quote}"
+                      </p>
+
+                      <p className="text-[var(--color-text-light)] mb-10 leading-relaxed font-medium">
+                        {story.story}
+                      </p>
+
+                      <div className="flex items-center justify-between pt-8 border-t border-[var(--color-border)]">
+                        <div className="flex items-center gap-4">
+                          <img 
+                            src={story.ownerImage} 
+                            alt={story.adopterName} 
+                            className="w-14 h-14 rounded-full object-cover border-2 border-white shadow-md"
+                          />
+                          <div>
+                            <p className="font-bold text-[var(--color-text)]">{story.adopterName}</p>
+                            <p className="text-sm text-[var(--color-text-light)]">Proud Parent in {story.location}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 px-4 py-2 bg-[var(--color-surface)] rounded-full text-[var(--color-primary)]">
+                          <HeartIcon className="w-4 h-4 fill-current" />
+                          <span className="text-xs font-bold uppercase tracking-wider">Adopted</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </motion.div>
-              ))}
+                  </motion.div>
+                ))
+              ) : (
+                <div className="text-center py-20 text-[var(--color-text-light)]">
+                  No success stories found yet. Be the first to share your journey!
+                </div>
+              )}
             </div>
           </div>
         </section>

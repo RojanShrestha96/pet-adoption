@@ -20,6 +20,7 @@ import { ProgressStepper } from "../../components/common/ProgressStepper";
 import { ConfirmationDialog } from "../../components/common/ConfirmationDialog";
 import { useToast } from "../../components/ui/Toast";
 import { LoadingSpinner } from "../../components/common/LoadingSpinner";
+import { formatAge } from "../../utils/ageUtils";
 export function AdoptionRequestPage() {
   const { petId } = useParams();
   const navigate = useNavigate();
@@ -50,6 +51,7 @@ export function AdoptionRequestPage() {
     homeType: "",
     rentOwn: "",
     landlordPermission: [] as string[],
+    landlordPermissionVerified: false,
     landlordPermissionCoversPetType: false,
     hasChildren: false,
     childrenDetails: "",
@@ -70,6 +72,37 @@ export function AdoptionRequestPage() {
     supportingFiles: [] as string[],
     agreeToTerms: false,
   });
+
+  // Pre-fill from profile snapshot
+  useEffect(() => {
+    if (adopterProfileSnap) {
+      const { personalInfo, household, lifestyle, email } = adopterProfileSnap;
+      setFormData(prev => ({
+        ...prev,
+        fullName: personalInfo?.fullName || prev.fullName,
+        email: email || prev.email,
+        phone: personalInfo?.phone || prev.phone,
+        age: personalInfo?.age?.toString() || prev.age,
+        address: personalInfo?.address || prev.address,
+        idType: personalInfo?.idType || prev.idType,
+        idNumber: personalInfo?.idNumber || prev.idNumber,
+        idDocuments: personalInfo?.idDocuments || prev.idDocuments,
+        homeType: household?.homeType || prev.homeType,
+        rentOwn: household?.rentOwn || prev.rentOwn,
+        landlordPermission: Array.isArray(household?.landlordPermission) ? household.landlordPermission : prev.landlordPermission,
+        landlordPermissionVerified: household?.landlordPermission === true,
+        hasChildren: household?.hasChildren ?? prev.hasChildren,
+        childrenDetails: household?.childrenDetails || prev.childrenDetails,
+        existingPets: household?.existingPets || prev.existingPets,
+        hasFencedYard: household?.hasFencedYard ?? prev.hasFencedYard,
+        safeEnvironment: household?.safeEnvironment ?? prev.safeEnvironment,
+        medicalAffordability: household?.medicalAffordability ?? prev.medicalAffordability,
+        annualVaccinations: household?.annualVaccinations ?? prev.annualVaccinations,
+        proofOfResidence: household?.proofOfResidence || prev.proofOfResidence,
+        petExperience: lifestyle?.experienceLevel || prev.petExperience,
+      }));
+    }
+  }, [adopterProfileSnap]);
   const steps = [
     {
       title: "Personal Info",
@@ -499,6 +532,22 @@ export function AdoptionRequestPage() {
                         }
                         maxFiles={1}
                       />
+                      {formData.landlordPermissionVerified && formData.landlordPermission.length === 0 && (
+                        <div 
+                          className="flex items-center gap-3 p-4 rounded-xl text-sm"
+                          style={{
+                            background: "rgba(34,197,94,0.08)",
+                            border: "1px solid rgba(34,197,94,0.25)",
+                            color: "var(--color-success, #22c55e)"
+                          }}
+                        >
+                          <Check className="w-5 h-5 flex-shrink-0" />
+                          <div>
+                            <p className="font-bold">Permission Pre-Verified</p>
+                            <p className="opacity-80">You've confirmed landlord permission in your profile. Uploading a formal letter is optional.</p>
+                          </div>
+                        </div>
+                      )}
                       <ToggleSwitch
                         checked={formData.landlordPermissionCoversPetType}
                         onChange={(checked) =>
@@ -733,7 +782,7 @@ export function AdoptionRequestPage() {
                           color: "var(--color-text-light)",
                         }}
                       >
-                        {pet.breed} • {pet.age}
+                        {pet.breed} • {formatAge(pet.age)}
                       </p>
                     </div>
                   </div>

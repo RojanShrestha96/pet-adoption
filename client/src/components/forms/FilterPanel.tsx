@@ -21,7 +21,6 @@ export interface FilterOptions {
   size: string[];
   age: string[];
   healthStatus: string[];
-  adoptionStatus: string[];
   shelter: string[];
 }
 
@@ -223,15 +222,6 @@ export function FilterPanel({ filters, onFilterChange, onReset, availableShelter
         { value: 'special-needs', label: 'Special Needs', icon: null },
       ]
     },
-    {
-      key: 'adoptionStatus' as const,
-      label: 'Status',
-      icon: Check,
-      options: [
-        { value: 'available', label: 'Available', icon: null },
-        { value: 'pending', label: 'Pending', icon: null },
-      ]
-    },
   ];
 
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -241,7 +231,6 @@ export function FilterPanel({ filters, onFilterChange, onReset, availableShelter
     gender: false,
     size: false,
     healthStatus: false,
-    adoptionStatus: false,
   });
 
   const toggleSection = (key: string) => {

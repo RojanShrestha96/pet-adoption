@@ -32,6 +32,8 @@ import { useToast } from "../../components/ui/Toast";
 import { LoadingSpinner } from "../../components/common/LoadingSpinner";
 import { ConfirmationDialog } from "../../components/common/ConfirmationDialog";
 import { useAuth } from "../../contexts/AuthContext";
+import { VaccinationRecordsEditor, VaccinationRecord } from "../../components/pets/VaccinationRecordsEditor";
+import { formatAge } from "../../utils/ageUtils";
 
 // Step configuration
 const STEPS = [
@@ -47,7 +49,8 @@ interface FormData {
   name: string;
   species: string;
   breed: string;
-  age: string;
+  ageYears: string;
+  ageMonths: string;
   gender: string;
   size: string;
   weight: string;
@@ -68,6 +71,8 @@ interface FormData {
   healthStatus: string;
   medicalNotes: string;
   otherConditions: string[];
+  vaccinations: VaccinationRecord[];
+  vaccinationStatus: string;
 
   // Medical Documents
   medicalDocuments: File[];
@@ -97,7 +102,8 @@ const initialFormData: FormData = {
   name: "",
   species: "",
   breed: "",
-  age: "",
+  ageYears: "",
+  ageMonths: "",
   gender: "",
   size: "",
   weight: "",
@@ -114,6 +120,8 @@ const initialFormData: FormData = {
   healthStatus: "healthy",
   medicalNotes: "",
   otherConditions: [],
+  vaccinations: [],
+  vaccinationStatus: "unknown",
   medicalDocuments: [],
   temperament: [],
   goodWithKids: "",
@@ -210,7 +218,7 @@ export function AddPetPage() {
         return formData.name && formData.species;
       case 3:
         // Physical fields AND all 5 compatibility-critical behavioural fields
-        return !!(formData.age && formData.gender && step3RequiredFields.every(v => v !== ""));
+        return !!((formData.ageYears || formData.ageMonths) && formData.gender && step3RequiredFields.every(v => v !== ""));
       case 4:
         return true; // Documentation is optional
       case 5:
@@ -314,7 +322,10 @@ export function AddPetPage() {
           name: formData.name,
           species: formData.species,
           breed: formData.breed,
-          age: formData.age,
+          age: {
+            years: Number(formData.ageYears) || 0,
+            months: Number(formData.ageMonths) || 0
+          },
           gender: formData.gender,
           size: formData.size,
           weight: formData.weight,
@@ -331,6 +342,8 @@ export function AddPetPage() {
           healthStatus: formData.healthStatus,
           medicalNotes: formData.medicalNotes,
           otherConditions: formData.otherConditions,
+          vaccinations: formData.vaccinations,
+          vaccinationStatus: formData.vaccinationStatus,
           medicalDocuments: documentUrls,
           temperament: formData.temperament,
           goodWithKids: formData.goodWithKids,
@@ -344,15 +357,15 @@ export function AddPetPage() {
             noiseLevel: formData.noiseLevel || undefined,
             sheddingLevel: formData.sheddingLevel || undefined,
           },
+          // Derived/Canonical fields for compatibility engine
+          energyLevel: Number(formData.energyScore) <= 2 ? 'low' : Number(formData.energyScore) === 3 ? 'moderate' : Number(formData.energyScore) === 4 ? 'high' : 'very-high',
           // Environment Requirements
           environment: {
             idealEnvironment: formData.idealEnvironment || undefined,
             minSpaceSqm: formData.minSpaceSqm ? Number(formData.minSpaceSqm) : 0,
           },
           // Financial
-          financial: {
-            estimatedMonthlyCost: formData.estimatedMonthlyCost ? Number(formData.estimatedMonthlyCost) : undefined,
-          },
+          estimatedMonthlyCost: formData.estimatedMonthlyCost ? Number(formData.estimatedMonthlyCost) : 0,
         }),
       });
 
@@ -615,15 +628,31 @@ export function AddPetPage() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <Input
-                        label="Age *"
-                        placeholder="e.g. 2 years, 6 months"
-                        value={formData.age}
-                        onChange={(e) =>
-                          handleInputChange("age", e.target.value)
-                        }
-                        fullWidth
-                      />
+                      <div className="grid grid-cols-2 gap-4">
+                        <Input
+                          label="Age (Years) *"
+                          type="number"
+                          min="0"
+                          placeholder="Years"
+                          value={formData.ageYears}
+                          onChange={(e) =>
+                            handleInputChange("ageYears", e.target.value)
+                          }
+                          fullWidth
+                        />
+                        <Input
+                          label="Age (Months)"
+                          type="number"
+                          min="0"
+                          max="11"
+                          placeholder="Months"
+                          value={formData.ageMonths}
+                          onChange={(e) =>
+                            handleInputChange("ageMonths", e.target.value)
+                          }
+                          fullWidth
+                        />
+                      </div>
 
                       <Input
                         label="Weight"
@@ -930,48 +959,37 @@ export function AddPetPage() {
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {/* Vaccination */}
-                      <div
-                        onClick={() =>
-                          handleInputChange(
-                            "isVaccinated",
-                            !formData.isVaccinated
-                          )
-                        }
-                        className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                          formData.isVaccinated
-                            ? "border-green-500 bg-green-50"
-                            : "border-gray-200 hover:border-gray-300"
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`p-2 rounded-lg ${
-                              formData.isVaccinated
-                                ? "bg-green-500"
-                                : "bg-gray-200"
-                            }`}
-                          >
-                            <Syringe
-                              className={`w-5 h-5 ${
-                                formData.isVaccinated
-                                  ? "text-white"
-                                  : "text-gray-500"
-                              }`}
-                            />
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-900">
-                              Vaccinated
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              Up to date vaccinations
-                            </p>
-                          </div>
-                          {formData.isVaccinated && (
-                            <CheckCircle2 className="w-5 h-5 text-green-500 ml-auto" />
-                          )}
-                        </div>
+                      {/* Overall Vaccination Status */}
+                      <div className="col-span-full">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          Overall Vaccination Status *
+                        </label>
+                        <select
+                          className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-[var(--color-primary)] focus:outline-none transition-colors bg-white font-medium shadow-sm"
+                          value={formData.vaccinationStatus}
+                          onChange={(e) =>
+                            handleInputChange("vaccinationStatus", e.target.value)
+                          }
+                          required
+                        >
+                          <option value="unknown">Unknown</option>
+                          <option value="not-vaccinated">Not Vaccinated</option>
+                          <option value="partially-vaccinated">Partially Vaccinated</option>
+                          <option value="fully-vaccinated">Fully Vaccinated</option>
+                        </select>
+                        <p className="text-xs text-gray-500 mt-2 flex items-center gap-1.5 ml-1">
+                          <AlertCircle className="w-3.5 h-3.5" />
+                          Set based on core vaccine requirements for {formData.species || 'the pet'}.
+                        </p>
+                      </div>
+
+                      {/* Structured Vaccination Records */}
+                      <div className="col-span-full mt-6 pt-6 border-t border-gray-100">
+                        <VaccinationRecordsEditor
+                          species={formData.species}
+                          vaccinations={formData.vaccinations}
+                          onChange={(vals) => handleInputChange("vaccinations", vals)}
+                        />
                       </div>
 
                       {/* Microchipped */}
@@ -1279,7 +1297,7 @@ export function AddPetPage() {
                         ref={fileInputRef}
                         type="file"
                         multiple
-                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                        accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,image/webp"
                         onChange={handleDocumentUpload}
                         className="hidden"
                       />
@@ -1378,9 +1396,9 @@ export function AddPetPage() {
                           </p>
 
                           <div className="flex flex-wrap gap-2 mt-3">
-                            {formData.age && (
+                            {(formData.ageYears || formData.ageMonths) && (
                               <span className="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-full text-sm font-medium">
-                                {formData.age}
+                                {formatAge({ years: parseInt(formData.ageYears) || 0, months: parseInt(formData.ageMonths) || 0 })}
                               </span>
                             )}
                             {formData.gender && (
@@ -1397,11 +1415,15 @@ export function AddPetPage() {
                           </div>
 
                           <div className="flex flex-wrap gap-2 mt-4">
-                            {formData.isVaccinated && (
-                              <span className="flex items-center gap-1 text-green-600 text-sm">
-                                <Syringe className="w-4 h-4" /> Vaccinated
+                            <div className="flex items-center gap-2">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                formData.vaccinationStatus === 'fully-vaccinated' ? 'bg-green-100 text-green-700' :
+                                formData.vaccinationStatus === 'partially-vaccinated' ? 'bg-amber-100 text-amber-700' :
+                                'bg-gray-100 text-gray-600'
+                              }`}>
+                                {formData.vaccinationStatus.replace('-', ' ')}
                               </span>
-                            )}
+                            </div>
                             {formData.isMicrochipped && (
                               <span className="flex items-center gap-1 text-green-600 text-sm">
                                 <Cpu className="w-4 h-4" /> Microchipped

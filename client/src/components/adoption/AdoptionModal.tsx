@@ -11,7 +11,7 @@ import {
   Heart,
   FileText,
   ClipboardCheck,
-  Lock,
+  CheckCircle,
   RefreshCw,
 } from "lucide-react";
 import { Button } from "../ui/Button";
@@ -21,8 +21,8 @@ import { ToggleSwitch } from "../ui/ToggleSwitch";
 import { useToast } from "../ui/Toast";
 import { useAdopterProfile } from "../../contexts/AdopterProfileContext";
 import { AdoptionInfoModal } from "./AdoptionInfoModal";
-import { CompatibilityScorePanel } from "./CompatibilityScorePanel";
 import { useSettings } from "../../contexts/SettingsContext";
+import { formatAge } from "../../utils/ageUtils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -32,7 +32,7 @@ interface Pet {
   name: string;
   species: "dog" | "cat" | "other";
   breed: string;
-  age: number;
+  age: number | string | { years?: number; months?: number };
   gender: "male" | "female";
   size: "small" | "medium" | "large" | "extra-large";
   image: string;
@@ -192,11 +192,6 @@ export function AdoptionModal({ pet, isOpen, onClose, onSubmit }: AdoptionModalP
     // Add always-required Intent step
     dynamicSteps.push({ id: dynamicSteps.length, title: "Adoption Intent", icon: Heart });
 
-    // Add Compatibility if enabled
-    if (settings.compatibilityIntelligenceEnabled) {
-      dynamicSteps.push({ id: dynamicSteps.length, title: "Compatibility", icon: FileText });
-    }
-
     // Add Review step
     dynamicSteps.push({ id: dynamicSteps.length, title: "Review", icon: Check });
 
@@ -260,6 +255,7 @@ export function AdoptionModal({ pet, isOpen, onClose, onSubmit }: AdoptionModalP
     homeType: "",
     rentOwn: "",
     landlordPermission: [] as string[],
+    landlordPermissionVerified: false,
     hasChildren: false,
     childrenDetails: "",
     existingPets: "",
@@ -313,7 +309,11 @@ export function AdoptionModal({ pet, isOpen, onClose, onSubmit }: AdoptionModalP
         ...prev,
         homeType: profile.household?.homeType ?? prev.homeType,
         rentOwn: profile.household?.rentOwn ?? prev.rentOwn,
-        landlordPermission: profile.household?.landlordPermission ?? prev.landlordPermission,
+        // Sync landlordPermission: Use array if available, otherwise consider it empty if it's just the boolean flag
+        landlordPermission: Array.isArray(profile.household?.landlordPermission) 
+          ? profile.household.landlordPermission 
+          : prev.landlordPermission,
+        landlordPermissionVerified: profile.household?.landlordPermission === true,
         hasChildren: profile.household?.hasChildren ?? prev.hasChildren,
         childrenDetails: profile.household?.childrenDetails ?? prev.childrenDetails,
         existingPets: profile.household?.existingPets ?? prev.existingPets,
@@ -385,7 +385,6 @@ export function AdoptionModal({ pet, isOpen, onClose, onSubmit }: AdoptionModalP
       if (steps[stepIdx].title === "Personal Info") return "personalInfo";
       if (steps[stepIdx].title === "Household") return "household";
       if (steps[stepIdx].title === "Adoption Intent" || steps[stepIdx].title === "Intent") return "intent";
-      if (steps[stepIdx].title === "Compatibility") return "compatibility";
       if (steps[stepIdx].title === "Review") return "review";
       return "";
   };
@@ -516,6 +515,7 @@ export function AdoptionModal({ pet, isOpen, onClose, onSubmit }: AdoptionModalP
           homeType: formData.homeType,
           rentOwn: formData.rentOwn,
           landlordPermission: formData.landlordPermission,
+          landlordPermissionVerified: profile.household?.landlordPermission === true,
           hasChildren: formData.hasChildren,
           childrenDetails: formData.childrenDetails,
           existingPets: formData.existingPets,
@@ -770,8 +770,20 @@ export function AdoptionModal({ pet, isOpen, onClose, onSubmit }: AdoptionModalP
             </div>
           </div>
           {formData.rentOwn === "rent" && (
-            <FileUpload label="Landlord Permission Letter" files={formData.landlordPermission}
-              onChange={(files) => setFormData({ ...formData, landlordPermission: files })} maxFiles={1} />
+            <div className="space-y-2">
+              <FileUpload 
+                label="Landlord Permission Letter" 
+                files={formData.landlordPermission}
+                onChange={(files) => setFormData({ ...formData, landlordPermission: files })} 
+                maxFiles={1} 
+              />
+              {profile.household?.landlordPermission === true && formData.landlordPermission.length === 0 && (
+                <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-100 rounded-lg text-xs text-green-700">
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  <span>Verified via your Adoption Profile. Uploading a formal letter is now optional but recommended.</span>
+                </div>
+              )}
+            </div>
           )}
           <div className="space-y-3">
             <ToggleSwitch checked={formData.hasChildren}
@@ -849,30 +861,6 @@ export function AdoptionModal({ pet, isOpen, onClose, onSubmit }: AdoptionModalP
       );
     }
 
-    // ── Compatibility Score ───────────────────────────────────────────────
-    if (stepName === "compatibility") {
-      const petIdStr = pet.id || pet._id || "";
-      return (
-        <div className="space-y-4">
-          <div>
-            <h3 className="text-2xl font-bold mb-1" style={{ color: "var(--color-text)" }}>
-              Compatibility Check
-            </h3>
-            <p className="text-sm" style={{ color: "var(--color-text-light)" }}>
-              See how well your profile matches {pet.name}'s needs.
-            </p>
-          </div>
-          {petIdStr ? (
-            <CompatibilityScorePanel petId={petIdStr} petName={pet.name} />
-          ) : (
-            <p className="text-sm" style={{ color: "var(--color-text-light)" }}>
-              Unable to compute score — pet ID missing.
-            </p>
-          )}
-        </div>
-      );
-    }
-
     // ── Review & Submit ───────────────────────────────────────────────────
     if (stepName === "review") {
       return (
@@ -896,7 +884,7 @@ export function AdoptionModal({ pet, isOpen, onClose, onSubmit }: AdoptionModalP
                 {pet.name}
               </h4>
               <p style={{ color: "var(--color-text-light)" }}>
-                {pet.breed} • {typeof pet.age === "number" ? `${pet.age} yrs` : pet.age}
+                {pet.breed} • {formatAge(pet.age)}
               </p>
             </div>
           </div>
@@ -1095,43 +1083,33 @@ export function AdoptionModal({ pet, isOpen, onClose, onSubmit }: AdoptionModalP
                 </div>
 
                 {/* Step progress */}
-                <div className="px-6 py-4 flex-shrink-0" style={{ background: "var(--color-surface)" }}>
-                  <div className="flex items-center justify-between">
+                <div className="px-6 py-5 flex-shrink-0" style={{ background: "var(--color-surface)" }}>
+                  {/* Row 1: Dots and connector lines only */}
+                  <div className="flex items-center justify-between mb-2">
                     {steps.map((step: any, index: number) => {
                       const Icon = step.icon;
                       const isCompleted = index < currentStep;
                       const isCurrent = index === currentStep;
                       return (
-                        <Fragment key={step.id}>
-                          <div className="flex flex-col items-center">
-                            <motion.div
-                              className="w-8 h-8 rounded-full flex items-center justify-center"
-                              style={{
-                                background:
-                                  isCompleted || isCurrent
-                                    ? "var(--color-primary)"
-                                    : "var(--color-border)",
-                                color:
-                                  isCompleted || isCurrent ? "white" : "var(--color-text-light)",
-                              }}
-                              animate={{ scale: isCurrent ? 1.1 : 1 }}
-                            >
-                              {isCompleted ? (
-                                <Check className="w-4 h-4" />
-                              ) : (
-                                <Icon className="w-4 h-4" />
-                              )}
-                            </motion.div>
-                            <span
-                              className="text-xs mt-1 hidden md:block"
-                              style={{
-                                color: isCurrent ? "var(--color-primary)" : "var(--color-text-light)",
-                                fontWeight: isCurrent ? 600 : 400,
-                              }}
-                            >
-                              {step.title}
-                            </span>
-                          </div>
+                        <Fragment key={`dot-${step.id}`}>
+                          <motion.div
+                            className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+                            style={{
+                              background:
+                                isCompleted || isCurrent
+                                  ? "var(--color-primary)"
+                                  : "var(--color-border)",
+                              color:
+                                isCompleted || isCurrent ? "white" : "var(--color-text-light)",
+                            }}
+                            animate={{ scale: isCurrent ? 1.1 : 1 }}
+                          >
+                            {isCompleted ? (
+                              <Check className="w-4 h-4" />
+                            ) : (
+                              <Icon className="w-4 h-4" />
+                            )}
+                          </motion.div>
                           {index < steps.length - 1 && (
                             <div
                               className="flex-1 h-0.5 mx-2 rounded-full"
@@ -1144,6 +1122,27 @@ export function AdoptionModal({ pet, isOpen, onClose, onSubmit }: AdoptionModalP
                             />
                           )}
                         </Fragment>
+                      );
+                    })}
+                  </div>
+                  {/* Row 2: Labels only – aligned under each dot */}
+                  <div className="hidden md:flex justify-between">
+                    {steps.map((step: any, index: number) => {
+                      const isCompleted = index < currentStep;
+                      const isCurrent = index === currentStep;
+                      return (
+                        <span
+                          key={`label-${step.id}`}
+                          className="text-xs text-center"
+                          style={{
+                            width: "32px",
+                            flexShrink: 0,
+                            color: isCurrent ? "var(--color-primary)" : "var(--color-text-light)",
+                            fontWeight: isCurrent ? 600 : isCompleted ? 500 : 400,
+                          }}
+                        >
+                          {step.title}
+                        </span>
                       );
                     })}
                   </div>

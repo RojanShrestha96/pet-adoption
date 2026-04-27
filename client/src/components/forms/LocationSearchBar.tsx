@@ -102,52 +102,58 @@ const LocationSearchBar: React.FC<LocationSearchBarProps> = ({ location, setLoca
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-2 transition-all">
-      <form onSubmit={handleTextSearch} className="flex flex-col sm:flex-row gap-2">
-        <div className="relative flex-grow">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search className="h-5 w-5 text-gray-400" />
+    <div className="flex items-stretch gap-2 w-full">
+      <div className="flex-grow transition-all">
+        <form onSubmit={handleTextSearch} className="flex">
+          <div className="relative flex-grow">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <Search className="h-5 w-5 text-gray-400" />
+            </div>
+            <input
+              type="text"
+              className="block w-full pl-12 pr-4 py-3.5 bg-white border border-gray-200 rounded-2xl shadow-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm transition-all"
+              placeholder="Enter city or district (e.g. Kathmandu)"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              disabled={loading}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleTextSearch(e);
+                }
+              }}
+            />
+            {loading && (
+              <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+                <div className="w-4 h-4 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
           </div>
-          <input
-            type="text"
-            className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-sm"
-            placeholder="Enter city or district (e.g. Kathmandu)"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            disabled={loading}
-          />
-        </div>
+        </form>
         
-        <div className="flex gap-2">
-          <button
-            type="submit"
-            disabled={loading || !searchInput.trim()}
-            className="w-full sm:w-auto px-4 py-2 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 disabled:opacity-50 transition-colors whitespace-nowrap"
-          >
-            {loading ? 'Searching...' : 'Search Area'}
-          </button>
-          
-          <button
-            type="button"
-            onClick={handleUseLocation}
-            disabled={loading}
-            className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center justify-center transition-colors tooltip group relative"
-            title="Use my current GPS location"
-          >
-            <Navigation className="h-5 w-5" />
-          </button>
-        </div>
-      </form>
-      
-      {error && <p className="mt-2 text-sm text-red-600 px-1">{error}</p>}
-      
-      {location && (
-        <div className="mt-2 px-1 text-sm">
-          <button onClick={() => setIsEditing(false)} className="text-gray-500 hover:text-gray-900 underline">
-            Cancel and keep "{location.label}"
-          </button>
-        </div>
-      )}
+        {error && <p className="mt-2 text-sm text-red-600 px-2 font-medium">{error}</p>}
+        
+        {location && (
+          <div className="mt-2 px-2 text-sm">
+            <button onClick={() => setIsEditing(false)} className="text-gray-500 hover:text-gray-900 underline font-medium">
+              Cancel and keep "{location.label}"
+            </button>
+          </div>
+        )}
+      </div>
+
+      <button
+        type="button"
+        onClick={handleUseLocation}
+        disabled={loading}
+        className="shrink-0 w-14 bg-white text-primary-600 rounded-2xl shadow-sm border border-gray-200 hover:bg-gray-50 flex items-center justify-center transition-all hover:shadow-md active:scale-95 group relative mb-auto"
+        style={{ height: '54px' }} // Explicitly matching typical py-3.5 height for precision
+        title="Use my current GPS location"
+      >
+        <Navigation className={`h-6 w-6 ${loading ? 'animate-pulse text-gray-400' : ''}`} />
+        <span className="absolute bottom-full mb-2 right-0 px-2 py-1 bg-gray-900 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+          Use My GPS Location
+        </span>
+      </button>
     </div>
   );
 };

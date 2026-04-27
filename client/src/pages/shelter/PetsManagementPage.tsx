@@ -34,6 +34,7 @@ import { useToast } from "../../components/ui/Toast";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { PetDocBadge } from "../../components/pets/PetDocBadge";
 import { LoadingSpinner } from "../../components/common/LoadingSpinner";
+import { formatAge } from "../../utils/ageUtils";
 
 // Define real Pet interface matching backend
 interface Pet {
@@ -41,7 +42,10 @@ interface Pet {
     name: string;
     species: string;
     breed: string;
-    age: string;
+    age: {
+        years: number;
+        months: number;
+    };
     gender: string;
     adoptionStatus: string; // 'available', 'pending', 'adopted', 'pending-review', 'rejected'
     reviewStatus: string;   // 'pending', 'approved', 'rejected'
@@ -51,6 +55,7 @@ interface Pet {
         isNeutered: boolean;
         isDewormed: boolean;
         healthStatus?: string;
+        vaccinationStatus?: string;
     };
     // Compatibility scoring fields
     behaviour?: {
@@ -82,6 +87,7 @@ function getMissingCompatibilityFields(pet: Pet): string[] {
     if (!pet.compatibility?.goodWithPets) missing.push("Good with Pets");
     return missing;
 }
+
 
 
 type ViewMode = "grid" | "list";
@@ -631,15 +637,16 @@ export function PetsManagementPage() {
                                 {pet.breed}
                               </p>
                             </div>
-                            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">
-                              {pet.age}
-                            </span>
+                              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">
+                                {formatAge(pet.age)}
+                              </span>
                           </div>
 
                           {/* Documentation Status */}
                           <div className="mt-2 mb-3">
                             <PetDocBadge
                               isVaccinated={pet.medical?.isVaccinated}
+                              vaccinationStatus={pet.medical?.vaccinationStatus}
                               isMicrochipped={false} // Add to data model if needed
                               isNeutered={pet.medical?.isNeutered}
                               isDewormed={pet.medical?.isDewormed}
@@ -719,7 +726,7 @@ export function PetsManagementPage() {
                                     {pet.name}
                                   </div>
                                   <div className="text-sm text-gray-500">
-                                    {pet.breed} • {pet.age}
+                                    {pet.breed} • {formatAge(pet.age)}
                                   </div>
                                 </div>
                               </div>
@@ -754,6 +761,7 @@ export function PetsManagementPage() {
                             <td className="px-6 py-4 hidden md:table-cell">
                               <PetDocBadge
                                 isVaccinated={pet.medical?.isVaccinated}
+                                vaccinationStatus={pet.medical?.vaccinationStatus}
                                 isMicrochipped={false}
                                 isNeutered={pet.medical?.isNeutered}
                                 isDewormed={pet.medical?.isDewormed}

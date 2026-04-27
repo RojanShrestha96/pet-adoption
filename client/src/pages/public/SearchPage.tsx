@@ -11,6 +11,7 @@ import {
   AlertCircle,
   Loader2,
 } from "lucide-react";
+import { SearchBar } from "../../components/forms/SearchBar";
 import { FilterPanel, FilterOptions } from "../../components/forms/FilterPanel";
 import { PetCard } from "../../components/pets/PetCard";
 import LocationSearchBar from "../../components/forms/LocationSearchBar";
@@ -19,6 +20,7 @@ import type { Pet } from "../../data/mockData";
 import { Button } from "../../components/ui/Button";
 import { Badge } from "../../components/ui/Badge";
 import axios from "axios";
+import { ageToMonths } from "../../utils/ageUtils";
 
 // Pet interface (matching backend model) is now imported from mockData.ts
 
@@ -29,7 +31,6 @@ const defaultFilters: FilterOptions = {
   size: [],
   age: [],
   healthStatus: [],
-  adoptionStatus: [],
   shelter: [],
 };
 
@@ -163,13 +164,13 @@ export function SearchPage() {
     // Age filter
     if (filters.age.length > 0) {
       result = result.filter((pet) => {
-        const ageNum = parseInt(pet.age);
-         return filters.age.some((ageRange) => {
-          if (ageRange === "Puppy/Kitten")
-            return ageNum < 1 || pet.age.toLowerCase().includes("month");
-          if (ageRange === "Young") return ageNum >= 1 && ageNum < 3;
-          if (ageRange === "Adult") return ageNum >= 3 && ageNum < 7;
-          if (ageRange === "Senior") return ageNum >= 7;
+        const totalMonths = ageToMonths(pet.age);
+        
+        return filters.age.some((ageRange) => {
+          if (ageRange === "Puppy/Kitten") return totalMonths < 12;
+          if (ageRange === "Young") return totalMonths >= 12 && totalMonths < 36;
+          if (ageRange === "Adult") return totalMonths >= 36 && totalMonths < 84;
+          if (ageRange === "Senior") return totalMonths >= 84;
           return false;
         });
       });
@@ -182,12 +183,7 @@ export function SearchPage() {
       );
     }
 
-    // Adoption status filter
-    if (filters.adoptionStatus.length > 0) {
-      result = result.filter((pet) =>
-        filters.adoptionStatus.includes(pet.adoptionStatus)
-      );
-    }
+
 
     // Shelter filter
     if (filters.shelter.length > 0) {
@@ -202,7 +198,7 @@ export function SearchPage() {
         result.sort((a, b) => a.name.localeCompare(b.name));
         break;
       case "age":
-        result.sort((a, b) => parseInt(a.age) - parseInt(b.age));
+        result.sort((a, b) => ageToMonths(a.age) - ageToMonths(b.age));
         break;
       case "oldest":
         result.reverse();
@@ -337,25 +333,15 @@ export function SearchPage() {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="max-w-2xl mx-auto"
           >
-            <div className="relative">
-              <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search by name, breed, or location..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-14 pr-12 py-4 text-lg rounded-2xl border-0 shadow-xl focus:outline-none focus:ring-4 focus:ring-white/30 transition-all"
-                style={{ background: "var(--color-card)" }}
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery("")}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded-full transition-colors"
-                >
-                  <X className="w-5 h-5 text-gray-400" />
-                </button>
-              )}
-            </div>
+            <SearchBar
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder="Search by name, breed, or location..."
+              className="relative w-full"
+              inputClassName="w-full pl-14 pr-12 py-4 text-lg rounded-2xl border-0 shadow-xl focus:outline-none focus:ring-4 focus:ring-white/30 transition-all"
+              style={{ background: "var(--color-card)" }}
+              onClear={() => setSearchQuery("")}
+            />
             {isSearching && (
               <motion.p
                 initial={{ opacity: 0 }}
@@ -419,14 +405,14 @@ export function SearchPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           
           {/* Location Proximity Search */}
-          <div className="mb-10 p-8 rounded-[2rem] border-2 shadow-sm transition-all hover:shadow-md" style={{ background: "var(--color-surface)", borderColor: "var(--color-border)" }}>
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 rounded-xl bg-indigo-100 text-indigo-600">
-                <MapPin className="w-6 h-6" />
-              </div>
-              <h3 className="text-xl font-bold" style={{ color: "var(--color-text)" }}>Find Pets Near You</h3>
+          <div className="flex items-center gap-3 mb-6 px-2">
+            <div className="p-2 rounded-xl bg-indigo-100 text-indigo-600">
+              <MapPin className="w-6 h-6" />
             </div>
-            
+            <h3 className="text-xl font-bold text-gray-900">Find Pets Near You</h3>
+          </div>
+
+          <div className="mb-10 p-8 rounded-[2rem] border-2 shadow-sm transition-all hover:shadow-md" style={{ background: "var(--color-surface)", borderColor: "var(--color-border)" }}>
             <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center">
               <div className="flex-1 w-full">
                 <LocationSearchBar location={userLocation} setLocation={setUserLocation} />
@@ -441,8 +427,8 @@ export function SearchPage() {
             </div>
             
             {!userLocation && (
-              <div className="mt-4 text-xs italic text-gray-400 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+              <div className="mt-4 text-xs italic text-gray-500 flex items-center gap-1.5 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary-400 animate-pulse" />
                 Select a location to enable distance filtering
               </div>
             )}

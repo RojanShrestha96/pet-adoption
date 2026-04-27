@@ -42,8 +42,8 @@ export function ResetPasswordPage() {
 
   const passwordChecks = [
     {
-      label: "At least 8 characters",
-      valid: password.length >= 8,
+      label: "At least 16 characters",
+      valid: password.length >= 16,
     },
     {
       label: "One uppercase letter",

@@ -1053,26 +1053,39 @@ export function SettingsPage() {
                           <Upload className="w-5 h-5" />
                           Step 2: Upload Documents
                       </h3>
-                      <input
-                        type="file"
-                        className="hidden"
-                        id="doc-upload"
-                        onChange={handleFileUpload}
-                      />
-                      <label
-                        htmlFor="doc-upload"
-                        className="block border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-[var(--color-primary)] transition-colors cursor-pointer bg-gray-50 group"
-                      >
-                        <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
-                             <Upload className="w-6 h-6 text-gray-500" />
+                      {!formData.isVerified ? (
+                        <>
+                          <input
+                            type="file"
+                            className="hidden"
+                            id="doc-upload"
+                            accept=".pdf,.doc,.docx,image/*"
+                            onChange={handleFileUpload}
+                          />
+                          <label
+                            htmlFor="doc-upload"
+                            className="block border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-[var(--color-primary)] transition-colors cursor-pointer bg-gray-50 group"
+                          >
+                            <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
+                                <Upload className="w-6 h-6 text-gray-500" />
+                            </div>
+                            <p className="font-medium text-gray-700">
+                              Click to upload filled template or licenses
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              PDF, JPG, PNG up to 10MB
+                            </p>
+                          </label>
+                        </>
+                      ) : (
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
+                          <Shield className="w-10 h-10 text-amber-500 mx-auto mb-3" />
+                          <p className="font-bold text-amber-900">Documentation Locked</p>
+                          <p className="text-sm text-amber-700 mt-1">
+                            Your shelter is verified. To update your documents, please contact support.
+                          </p>
                         </div>
-                        <p className="font-medium text-gray-700">
-                          Click to upload filled template or licenses
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          PDF, JPG, PNG up to 10MB
-                        </p>
-                      </label>
+                      )}
                     </div>
 
                     <div className="space-y-4">
@@ -1118,16 +1131,18 @@ export function SettingsPage() {
                             </div>
                           </div>
                           
-                          <div title="Remove Document">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-2"
-                                onClick={() => removeDocument(idx)}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                          </div>
+                          {!formData.isVerified && (
+                             <div title="Remove Document">
+                                 <Button
+                                   variant="ghost"
+                                   size="sm"
+                                   className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-2"
+                                   onClick={() => removeDocument(idx)}
+                                 >
+                                   <Trash2 className="w-4 h-4" />
+                                 </Button>
+                             </div>
+                          )}
                         </div>
                       ))}
                     </div>

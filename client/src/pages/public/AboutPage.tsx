@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/Button";
+import { formatAge } from "../../utils/ageUtils";
 import { motion } from "framer-motion";
 import {
   Heart,
@@ -287,7 +288,7 @@ function ShelterSection() {
                       <div className="flex-1">
                         <div className="text-xs font-black uppercase tracking-widest mb-1" style={{ color: "var(--color-primary)" }}>Meet {featuredPet.name}</div>
                         <p className="text-sm font-medium opacity-90" style={{ color: "var(--color-text)" }}>
-                          {featuredPet.breed} • {featuredPet.age} • Looking for a family
+                          {featuredPet.breed} • {formatAge(featuredPet.age)} • Looking for a family
                         </p>
                       </div>
                     </motion.div>

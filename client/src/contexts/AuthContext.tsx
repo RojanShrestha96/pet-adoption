@@ -24,7 +24,7 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
-  login: (userData: User, authToken: string) => void;
+  login: (userData: User, authToken: string, remember?: boolean) => void;
   logout: () => void;
   refreshUser: () => Promise<void>;
   updateUser: (userData: User) => void;
@@ -40,15 +40,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(localStorage.getItem("token"));
+  const [token, setToken] = useState<string | null>(
+    localStorage.getItem("token") || sessionStorage.getItem("token")
+  );
   const [isLoading, setIsLoading] = useState(true);
   const { changeTheme } = useTheme();
 
-  // Initialize auth from localStorage
+  // Helper to get from either storage
+  const getFromStorage = (key: string) => {
+    return localStorage.getItem(key) || sessionStorage.getItem(key);
+  };
+
+  // Helper to save to the appropriate storage
+  const saveToStorage = (key: string, value: string) => {
+    // If it's already in one, stay there. Otherwise default to localStorage
+    if (sessionStorage.getItem(key)) {
+      sessionStorage.setItem(key, value);
+    } else {
+      localStorage.setItem(key, value);
+    }
+  };
+
+  // Initialize auth from storage
   useEffect(() => {
     // Check local storage for user/token on load
-    const storedUser = localStorage.getItem("user");
-    const storedToken = localStorage.getItem("token");
+    const storedUser = getFromStorage("user");
+    const storedToken = getFromStorage("token");
 
     if (storedUser && storedToken) {
       const parsedUser = JSON.parse(storedUser);
@@ -64,11 +81,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setIsLoading(false);
   }, []);
 
-  const login = (userData: User, authToken: string) => {
+  const login = (userData: User, authToken: string, remember: boolean = true) => {
     setUser(userData);
     setToken(authToken);
-    localStorage.setItem("user", JSON.stringify(userData));
-    localStorage.setItem("token", authToken);
+
+    const storage = remember ? localStorage : sessionStorage;
+    
+    // Clear other storage to avoid conflicts
+    const otherStorage = remember ? sessionStorage : localStorage;
+    otherStorage.removeItem("user");
+    otherStorage.removeItem("token");
+
+    storage.setItem("user", JSON.stringify(userData));
+    storage.setItem("token", authToken);
+
     // Sync theme on fresh login
     if (userData.theme) {
       changeTheme(userData.theme as any);
@@ -80,19 +106,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setToken(null);
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    sessionStorage.removeItem("token");
+    sessionStorage.removeItem("user");
   };
 
   // Helper to re-fetch user profile (useful after favorites update)
   const refreshUser = async () => {
-    if (!token) return;
+    const currentToken = getFromStorage("token");
+    if (!currentToken) return;
     try {
       const response = await fetch('http://localhost:5000/api/auth/profile', {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${currentToken}` }
       });
       if (response.ok) {
         const data = await response.json();
         setUser(data.user);
-        localStorage.setItem("user", JSON.stringify(data.user));
+        saveToStorage("user", JSON.stringify(data.user));
       } else if (response.status === 401 || response.status === 403) {
         // If forbidden or unauthorized (e.g. banned mid-session), force logout
         const errorData = await response.json();
@@ -108,7 +137,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const updateUser = (userData: User) => {
     setUser(userData);
-    localStorage.setItem("user", JSON.stringify(userData));
+    saveToStorage("user", JSON.stringify(userData));
   };
 
   const value = useMemo(

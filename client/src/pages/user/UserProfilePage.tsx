@@ -21,12 +21,17 @@ import {
   PawPrint,
   TrendingUp,
   Sparkles,
+  X,
+  Loader2,
+  Home,
+  Activity,
 } from "lucide-react";
 import { Card } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
 import { ToggleSwitch } from "../../components/ui/ToggleSwitch";
 import { Badge } from "../../components/ui/Badge";
+import { FileUpload } from "../../components/forms/FileUpload";
 
 import { useNavigate, Link } from "react-router-dom";
 import { LogoutConfirmModal } from "../../components/common/LogoutConfirmModal";
@@ -36,14 +41,13 @@ import { useToast } from "../../components/ui/Toast";
 import { ThemeSwitcher } from "../../components/common/ThemeSwitcher";
 import { LocationPicker } from "../../components/forms/LocationPicker";
 import { DonationReceiptModal, DonationReceipt } from "../../components/donation/DonationReceiptModal";
+import { AdopterProfileEditorModal } from "../../components/user/AdopterProfileEditorModal";
 
 type Tab =
   | "profile"
   | "adoptionProfile"
-  | "saved"
   | "history"
   | "donations"
-  | "notifications"
   | "preferences"
   | "security"
   | "location";
@@ -122,7 +126,6 @@ export function UserProfilePage() {
     shelterMessages: true,
     adoptionTips: false,
   });
-  const [notificationList, setNotificationList] = useState<any[]>([]);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [userDonations, setUserDonations] = useState<any[]>([]);
   const [loadingDonations, setLoadingDonations] = useState(false);
@@ -149,11 +152,16 @@ export function UserProfilePage() {
   const [tier2Pending, setTier2Pending] = useState<{ payload: any; message: string } | null>(null);
   const [tier2Note, setTier2Note] = useState("");
 
+  // Adopter profile modal state
+  const [showAdopterModal, setShowAdopterModal] = useState(false);
+  const [adopterModalStep, setAdopterModalStep] = useState(0);
+
   // Adopter profile section drafts
   const [householdDraft, setHouseholdDraft] = useState<any>({});
   const [lifestyleDraft, setLifestyleDraft] = useState<any>({});
   const [preferencesDraft, setPreferencesDraft] = useState<any>({});
   const [financialDraft, setFinancialDraft] = useState<any>({});
+  const [personalInfoDraft, setPersonalInfoDraft] = useState<any>({});
 
   const handleSaveMessage = async (donationId: string) => {
     try {
@@ -214,11 +222,44 @@ export function UserProfilePage() {
           formattedAddress: loc.formattedAddress
         }
       }, { headers: { Authorization: `Bearer ${token}` } })
-      .catch(err => console.error("Failed to sync location to profile", err));
+      .then(() => {
+        // SUCCESS: Update main profile view and auth context
+        setProfileData(prev => ({ ...prev, location: loc.formattedAddress }));
+        if (user && login) {
+          login({ ...user, address: loc.formattedAddress }, token!);
+        }
+        showToast("Location updated successfully!", "success");
+      })
+      .catch(err => {
+        console.error("Failed to sync location to profile", err);
+        showToast("Failed to save location to server", "error");
+      });
     }
   };
 
   // Legacy geolocation effect removed in favor of LocationPicker tab
+
+  const [adoptionHistory, setAdoptionHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === "history") {
+      const fetchHistory = async () => {
+        setLoadingHistory(true);
+        try {
+          const res = await axios.get("http://localhost:5000/api/applications/adopter/my-applications", {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          setAdoptionHistory(res.data.applications || []);
+        } catch (err) {
+          console.error("Failed to fetch history", err);
+        } finally {
+          setLoadingHistory(false);
+        }
+      };
+      fetchHistory();
+    }
+  }, [activeTab, token]);
 
   const handleLogout = () => {
     setShowLogoutModal(false);
@@ -226,44 +267,12 @@ export function UserProfilePage() {
     navigate("/login");
   };
 
-  // Mock adoption history
-  const adoptionHistory = [
-    {
-      id: "1",
-      petName: "Luna",
-      petImage:
-        "https://images.unsplash.com/photo-1633722715463-d30f4f325e24?w=200&h=200&fit=crop",
-      status: "approved",
-      date: "2024-01-15",
-      shelter: "Kathmandu Animal Shelter",
-    },
-    {
-      id: "2",
-      petName: "Max",
-      petImage:
-        "https://images.unsplash.com/photo-1568572933382-74d440642117?w=200&h=200&fit=crop",
-      status: "pending",
-      date: "2024-01-20",
-      shelter: "Patan Pet Rescue",
-    },
-    {
-      id: "3",
-      petName: "Bella",
-      petImage:
-        "https://images.unsplash.com/photo-1495360010541-f48722b34f7d?w=200&h=200&fit=crop",
-      status: "rejected",
-      date: "2024-01-10",
-      shelter: "Bhaktapur Animal Care",
-    },
-  ];
   const tabs = [
     { id: "profile" as Tab, label: "Profile", icon: User },
     { id: "adoptionProfile" as Tab, label: "Adoption Profile", icon: PawPrint },
     { id: "location" as Tab, label: "Location", icon: MapPin },
-    { id: "saved" as Tab, label: "Saved Pets", icon: Heart },
     { id: "history" as Tab, label: "Adoption History", icon: FileText },
     { id: "donations" as Tab, label: "Donation History", icon: Heart },
-    { id: "notifications" as Tab, label: "Notifications", icon: Bell },
     { id: "preferences" as Tab, label: "Preferences", icon: Settings },
     { id: "security" as Tab, label: "Security", icon: Lock },
   ];
@@ -278,10 +287,55 @@ export function UserProfilePage() {
       label: "Pending",
       icon: Clock,
     },
+    reviewing: {
+      variant: "warning" as const,
+      label: "Reviewing",
+      icon: FileText,
+    },
+    availability_submitted: {
+      variant: "success" as const,
+      label: "Slot Selected",
+      icon: Calendar,
+    },
+    meeting_scheduled: {
+      variant: "success" as const,
+      label: "Meeting Set",
+      icon: Calendar,
+    },
+    meeting_completed: {
+      variant: "success" as const,
+      label: "Met Pet",
+      icon: Heart,
+    },
+    finalization_pending: {
+      variant: "success" as const,
+      label: "Finalizing",
+      icon: TrendingUp,
+    },
+    payment_pending: {
+      variant: "warning" as const,
+      label: "Payment Due",
+      icon: Clock,
+    },
+    contract_signed: {
+      variant: "success" as const,
+      label: "Contract Signed",
+      icon: CheckCircle,
+    },
     rejected: {
       variant: "neutral" as const,
       label: "Rejected",
       icon: XCircle,
+    },
+    cancelled: {
+      variant: "neutral" as const,
+      label: "Cancelled",
+      icon: X,
+    },
+    completed: {
+      variant: "success" as const,
+      label: "Adopted! 🐾",
+      icon: PawPrint,
     },
   };
   const handleSaveProfile = async () => {
@@ -356,22 +410,7 @@ export function UserProfilePage() {
     }
   };
 
-  useEffect(() => {
-    if (activeTab === "notifications") {
-      const fetchNotifications = async () => {
-        try {
-          const response = await axios.get(
-            "http://localhost:5000/api/notifications",
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          setNotificationList(response.data.notifications);
-        } catch (error) {
-          console.error("Error fetching notifications:", error);
-        }
-      };
-      fetchNotifications();
-    }
-  }, [activeTab, token]);
+
 
   // Fetch adopter profile when tab opens
   useEffect(() => {
@@ -394,6 +433,15 @@ export function UserProfilePage() {
             monthlyPetBudget: data.lifestyle?.monthlyPetBudget ?? "",
             upcomingLifeChanges: data.lifestyle?.upcomingLifeChanges ?? [],
           });
+          setPersonalInfoDraft(data.personalInfo ?? {
+            fullName: "",
+            phone: "",
+            age: undefined,
+            address: "",
+            idType: "",
+            idNumber: "",
+            idDocuments: [],
+          });
         } catch (err) {
           console.error("Failed to load adopter profile", err);
         } finally {
@@ -406,8 +454,21 @@ export function UserProfilePage() {
 
   const saveAdopterSection = async (section: string, payload: any, force = false) => {
     // Check if section has Tier 2 fields — warn before sending
-    const TIER2 = ["homeType", "hasFencedYard", "hasChildren", "childrenAgeRange", "existingPets", "housingTenure"];
-    const hasTier2 = section === "household" && Object.keys(payload.household ?? {}).some((k) => TIER2.includes(k));
+    const TIER2 = [
+      "homeType", 
+      "hasFencedYard", 
+      "hasChildren", 
+      "childrenAgeRange", 
+      "existingPets", 
+      "housingTenure",
+      "landlordPermission",
+      "landlordPermissionDocs",
+      "proofOfResidence",
+      "idDocuments"
+    ];
+    
+    const hasTier2 = (section === "household" || section === "personalInfo") && 
+      Object.keys(payload[section] ?? {}).some((k) => TIER2.includes(k));
     if (hasTier2 && !force) {
       setTier2Pending({ payload, message: "Saving this change may notify shelters reviewing your active applications." });
       return;
@@ -420,6 +481,40 @@ export function UserProfilePage() {
       });
       const updated = res.data.profile;
       setAdopterProfile(updated);
+
+      // Manual sync for draft states to ensure immediate UI consistency
+      if (updated.personalInfo) setPersonalInfoDraft(updated.personalInfo);
+      if (updated.household) setHouseholdDraft(updated.household);
+      if (updated.lifestyle) {
+        setLifestyleDraft(updated.lifestyle);
+        setPreferencesDraft({
+          preferredEnergyLevel: updated.lifestyle.preferredEnergyLevel ?? "",
+          preferredSize: updated.lifestyle.preferredSize ?? "",
+        });
+        setFinancialDraft({
+          monthlyPetBudget: updated.lifestyle.monthlyPetBudget ?? "",
+          upcomingLifeChanges: updated.lifestyle.upcomingLifeChanges ?? [],
+        });
+      }
+
+      // UX Sync: If updating personalInfo, reflect in main Profile UI & Auth Context
+      if (section === "personalInfo" && payload.personalInfo) {
+        setProfileData(prev => ({
+          ...prev,
+          name: payload.personalInfo.fullName || prev.name,
+          phone: payload.personalInfo.phone || prev.phone,
+          location: payload.personalInfo.address || prev.location
+        }));
+
+        if (user && login) {
+          login({
+            ...user,
+            name: payload.personalInfo.fullName || user.name,
+            phone: payload.personalInfo.phone || user.phone,
+            address: payload.personalInfo.address || user.address
+          }, token!);
+        }
+      }
       setAdopterProfileEditing(null);
       setTier2Pending(null);
       setTier2Note("");
@@ -430,10 +525,27 @@ export function UserProfilePage() {
           : "Profile updated. Your compatibility scores have been refreshed.",
         "success"
       );
-    } catch (err: any) {
-      showToast(err.response?.data?.message ?? "Failed to save profile", "error");
     } finally {
       setAdopterProfileSaving(false);
+    }
+  };
+
+  const handleCancelApplication = async (appId: string) => {
+    if (!window.confirm("Are you sure you want to withdraw this application? This action cannot be undone.")) return;
+    
+    try {
+      const res = await axios.delete(`http://localhost:5000/api/applications/${appId}/cancel`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.status === 200) {
+        showToast("Application withdrawn successfully", "success");
+        // Update local state
+        setAdoptionHistory(prev => prev.map(app => 
+          app._id === appId ? { ...app, status: 'cancelled' } : app
+        ));
+      }
+    } catch (err: any) {
+      showToast(err.response?.data?.message || "Failed to withdraw application", "error");
     }
   };
 
@@ -457,22 +569,7 @@ export function UserProfilePage() {
     }
   }, [activeTab, token, userDonations.length]);
 
-  const markAsRead = async (id: string) => {
-    try {
-      setNotificationList((prev) =>
-        prev.map((n) => (n._id === id ? { ...n, read: true } : n))
-      );
-      await axios.put(
-        `http://localhost:5000/api/notifications/${id}/read`,
-        {},
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-    } catch (error) {
-      console.error("Error marking read:", error);
-    }
-  };
+
 
   return (
     <div
@@ -507,7 +604,7 @@ export function UserProfilePage() {
               color: "var(--color-text-light)",
             }}
           >
-            Manage your account, saved pets, and adoption applications
+            Manage your account and adoption applications
           </p>
         </motion.div>
 
@@ -595,55 +692,7 @@ export function UserProfilePage() {
                   {profileData.email}
                 </p>
 
-                {/* Stats */}
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div
-                    className="p-3 rounded-xl"
-                    style={{
-                      background: "var(--color-surface)",
-                    }}
-                  >
-                    <p
-                      className="text-2xl font-bold"
-                      style={{
-                        color: "var(--color-primary)",
-                      }}
-                    >
-                      {user?.favoritePets?.length || 0}
-                    </p>
-                    <p
-                      className="text-xs"
-                      style={{
-                        color: "var(--color-text-light)",
-                      }}
-                    >
-                      Saved Pets
-                    </p>
-                  </div>
-                  <div
-                    className="p-3 rounded-xl"
-                    style={{
-                      background: "var(--color-surface)",
-                    }}
-                  >
-                    <p
-                      className="text-2xl font-bold"
-                      style={{
-                        color: "var(--color-secondary)",
-                      }}
-                    >
-                      {adoptionHistory.length}
-                    </p>
-                    <p
-                      className="text-xs"
-                      style={{
-                        color: "var(--color-text-light)",
-                      }}
-                    >
-                      Applications
-                    </p>
-                  </div>
-                </div>
+
 
                 {/* Navigation */}
                 <div className="space-y-2">
@@ -744,7 +793,7 @@ export function UserProfilePage() {
                     disabled={!isEditing}
                   />
                   <Input
-                    label="Email"
+                    label="Email (Account ID)"
                     type="email"
                     value={profileData.email}
                     onChange={(e) =>
@@ -755,7 +804,8 @@ export function UserProfilePage() {
                     }
                     icon={<Mail className="w-5 h-5" />}
                     fullWidth
-                    disabled={!isEditing}
+                    disabled={true}
+                    helperText="Email is your unique account identifier and cannot be changed."
                   />
                   <Input
                     label="Phone"
@@ -837,217 +887,56 @@ export function UserProfilePage() {
                         </div>
                       )}
                     </Card>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Summary blocks */}
+                      <Card className="p-5 border-l-4 border-[var(--color-primary)]">
+                        <div className="flex items-center gap-3 mb-2">
+                           <User className="w-5 h-5 text-[var(--color-primary)]" />
+                           <h4 className="font-bold">Personal Details</h4>
+                        </div>
+                        <p className="text-sm text-gray-500 mb-1">{adopterProfile?.personalInfo?.fullName || "Not provided"}</p>
+                        <p className="text-sm text-gray-500">{adopterProfile?.personalInfo?.address || "No address"}</p>
+                      </Card>
+                      
+                      <Card className="p-5 border-l-4 border-[var(--color-primary)]">
+                        <div className="flex items-center gap-3 mb-2">
+                           <Home className="w-5 h-5 text-[var(--color-primary)]" />
+                           <h4 className="font-bold">Household</h4>
+                        </div>
+                        <p className="text-sm text-gray-500 mb-1">{adopterProfile?.household?.homeType || "Not specified"} • {adopterProfile?.household?.rentOwn || "Not specified"}</p>
+                        <p className="text-sm text-gray-500">{adopterProfile?.household?.hasChildren ? "Has children" : "No children"} • {adopterProfile?.household?.hasFencedYard ? "Fenced yard" : "No fenced yard"}</p>
+                      </Card>
 
-                    {/* Section A: Household */}
-                    <Card padding="lg">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-lg font-bold" style={{ color: "var(--color-text)" }}>Household</h4>
-                        {adopterProfileEditing !== "household" ? (
-                          <Button variant="outline" icon={<Edit2 className="w-4 h-4" />} onClick={() => { setHouseholdDraft(adopterProfile?.household ?? {}); setAdopterProfileEditing("household"); }}>Edit</Button>
-                        ) : (
-                          <div className="flex gap-2">
-                            <Button variant="outline" onClick={() => setAdopterProfileEditing(null)}>Cancel</Button>
-                            <Button variant="primary" icon={<Save className="w-4 h-4" />} onClick={() => saveAdopterSection("household", { household: householdDraft })} disabled={adopterProfileSaving}>Save</Button>
-                          </div>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium mb-1" style={{ color: "var(--color-text)" }}>Home Type</label>
-                          <select disabled={adopterProfileEditing !== "household"} className="w-full px-3 py-2 border-2 rounded-xl" style={{ borderColor: "var(--color-border)", background: "var(--color-card)", color: "var(--color-text)" }} value={householdDraft.homeType ?? ""} onChange={(e) => setHouseholdDraft((p: any) => ({ ...p, homeType: e.target.value }))}>
-                            <option value="">Select</option>
-                            <option value="apartment">Apartment</option>
-                            <option value="house">House</option>
-                            <option value="condo">Condo</option>
-                            <option value="townhouse">Townhouse</option>
-                          </select>
+                      <Card className="p-5 border-l-4 border-amber-500">
+                        <div className="flex items-center gap-3 mb-2">
+                           <Activity className="w-5 h-5 text-amber-500" />
+                           <h4 className="font-bold">Lifestyle</h4>
                         </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1" style={{ color: "var(--color-text)" }}>Rent or Own</label>
-                          <select disabled={adopterProfileEditing !== "household"} className="w-full px-3 py-2 border-2 rounded-xl" style={{ borderColor: "var(--color-border)", background: "var(--color-card)", color: "var(--color-text)" }} value={householdDraft.rentOwn ?? ""} onChange={(e) => setHouseholdDraft((p: any) => ({ ...p, rentOwn: e.target.value }))}>
-                            <option value="">Select</option>
-                            <option value="rent">Rent</option>
-                            <option value="own">Own</option>
-                            <option value="live with family">Live with family</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1" style={{ color: "var(--color-text)" }}>Living Space (sqm, optional)</label>
-                          <input type="number" disabled={adopterProfileEditing !== "household"} className="w-full px-3 py-2 border-2 rounded-xl" style={{ borderColor: "var(--color-border)", background: "var(--color-card)", color: "var(--color-text)" }} value={householdDraft.livingSizeSqm ?? ""} onChange={(e) => setHouseholdDraft((p: any) => ({ ...p, livingSizeSqm: Number(e.target.value) }))} placeholder="e.g. 65" />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1" style={{ color: "var(--color-text)" }}>Existing Pets</label>
-                          <input type="text" disabled={adopterProfileEditing !== "household"} className="w-full px-3 py-2 border-2 rounded-xl" style={{ borderColor: "var(--color-border)", background: "var(--color-card)", color: "var(--color-text)" }} value={householdDraft.existingPets ?? ""} onChange={(e) => setHouseholdDraft((p: any) => ({ ...p, existingPets: e.target.value }))} placeholder="e.g. 1 cat, 2 dogs" />
-                        </div>
-                      </div>
-                      <div className="mt-4 space-y-3">
-                        <ToggleSwitch checked={!!householdDraft.hasFencedYard} onChange={(v) => setHouseholdDraft((p: any) => ({ ...p, hasFencedYard: v }))} label="Fenced yard" disabled={adopterProfileEditing !== "household"} />
-                        <ToggleSwitch checked={!!householdDraft.hasChildren} onChange={(v) => setHouseholdDraft((p: any) => ({ ...p, hasChildren: v }))} label="Children in household" disabled={adopterProfileEditing !== "household"} />
-                        <ToggleSwitch checked={!!householdDraft.hasAllergies} onChange={(v) => setHouseholdDraft((p: any) => ({ ...p, hasAllergies: v }))} label="Any household members have pet allergies" disabled={adopterProfileEditing !== "household"} />
-                        <ToggleSwitch checked={!!householdDraft.safeEnvironment} onChange={(v) => setHouseholdDraft((p: any) => ({ ...p, safeEnvironment: v }))} label="I can provide a safe environment" disabled={adopterProfileEditing !== "household"} />
-                        <ToggleSwitch checked={!!householdDraft.annualVaccinations} onChange={(v) => setHouseholdDraft((p: any) => ({ ...p, annualVaccinations: v }))} label="Committing to annual vaccinations" disabled={adopterProfileEditing !== "household"} />
-                      </div>
-                    </Card>
+                        <p className="text-sm text-gray-500 mb-1">Work: {adopterProfile?.lifestyle?.workStyle || "Not specified"}</p>
+                        <p className="text-sm text-gray-500">Activity: {adopterProfile?.lifestyle?.activityLevel || "Not specified"}</p>
+                      </Card>
 
-                    {/* Section B: Lifestyle & Work */}
-                    <Card padding="lg">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-lg font-bold" style={{ color: "var(--color-text)" }}>Lifestyle &amp; Work</h4>
-                        {adopterProfileEditing !== "lifestyle" ? (
-                          <Button variant="outline" icon={<Edit2 className="w-4 h-4" />} onClick={() => { setLifestyleDraft(adopterProfile?.lifestyle ?? {}); setAdopterProfileEditing("lifestyle"); }}>Edit</Button>
-                        ) : (
-                          <div className="flex gap-2">
-                            <Button variant="outline" onClick={() => setAdopterProfileEditing(null)}>Cancel</Button>
-                            <Button variant="primary" icon={<Save className="w-4 h-4" />} onClick={() => saveAdopterSection("lifestyle", { lifestyle: lifestyleDraft })} disabled={adopterProfileSaving}>Save</Button>
-                          </div>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium mb-1" style={{ color: "var(--color-text)" }}>Work Style</label>
-                          <select disabled={adopterProfileEditing !== "lifestyle"} className="w-full px-3 py-2 border-2 rounded-xl" style={{ borderColor: "var(--color-border)", background: "var(--color-card)", color: "var(--color-text)" }} value={lifestyleDraft.workStyle ?? ""} onChange={(e) => setLifestyleDraft((p: any) => ({ ...p, workStyle: e.target.value }))}>
-                            <option value="">Select</option>
-                            <option value="fully-remote">Fully Remote</option>
-                            <option value="hybrid">Hybrid</option>
-                            <option value="office-based">Office-based</option>
-                          </select>
+                      <Card className="p-5 border-l-4 border-amber-500">
+                        <div className="flex items-center gap-3 mb-2">
+                           <Heart className="w-5 h-5 text-amber-500" />
+                           <h4 className="font-bold">Preferences</h4>
                         </div>
-                        {lifestyleDraft.workStyle === "hybrid" && (
-                          <div>
-                            <label className="block text-sm font-medium mb-1" style={{ color: "var(--color-text)" }}>Days at home / week</label>
-                            <input type="number" min={0} max={5} disabled={adopterProfileEditing !== "lifestyle"} className="w-full px-3 py-2 border-2 rounded-xl" style={{ borderColor: "var(--color-border)", background: "var(--color-card)", color: "var(--color-text)" }} value={lifestyleDraft.hybridDaysHomePerWeek ?? ""} onChange={(e) => setLifestyleDraft((p: any) => ({ ...p, hybridDaysHomePerWeek: Number(e.target.value) }))} />
-                          </div>
-                        )}
-                        <div>
-                          <label className="block text-sm font-medium mb-1" style={{ color: "var(--color-text)" }}>Activity Level</label>
-                          <select disabled={adopterProfileEditing !== "lifestyle"} className="w-full px-3 py-2 border-2 rounded-xl" style={{ borderColor: "var(--color-border)", background: "var(--color-card)", color: "var(--color-text)" }} value={lifestyleDraft.activityLevel ?? ""} onChange={(e) => setLifestyleDraft((p: any) => ({ ...p, activityLevel: e.target.value }))}>
-                            <option value="">Select</option>
-                            <option value="low">Low — light, relaxed lifestyle</option>
-                            <option value="moderate">Moderate — regular walks and light exercise</option>
-                            <option value="high">High — active, outdoor lifestyle</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1" style={{ color: "var(--color-text)" }}>Experience with Pets</label>
-                          <select disabled={adopterProfileEditing !== "lifestyle"} className="w-full px-3 py-2 border-2 rounded-xl" style={{ borderColor: "var(--color-border)", background: "var(--color-card)", color: "var(--color-text)" }} value={lifestyleDraft.experienceLevel ?? ""} onChange={(e) => setLifestyleDraft((p: any) => ({ ...p, experienceLevel: e.target.value }))}>
-                            <option value="">Select</option>
-                            <option value="first-time">First-time owner</option>
-                            <option value="some-experience">Some experience</option>
-                            <option value="experienced">Highly experienced</option>
-                          </select>
-                        </div>
-                      </div>
-                      <div className="mt-4">
-                        <label className="block text-sm font-medium mb-2" style={{ color: "var(--color-text)" }}>Pet Care Support when away</label>
-                        <div className="flex flex-wrap gap-2">
-                          {["dog-walker", "pet-sitter", "trusted-family-nearby", "doggy-daycare", "none"].map((opt) => (
-                            <button
-                              key={opt}
-                              type="button"
-                              disabled={adopterProfileEditing !== "lifestyle"}
-                              onClick={() => {
-                                const current: string[] = lifestyleDraft.petCareSupport ?? [];
-                                setLifestyleDraft((p: any) => ({ ...p, petCareSupport: current.includes(opt) ? current.filter((x: string) => x !== opt) : [...current, opt] }));
-                              }}
-                              className="px-3 py-1 rounded-full text-sm font-medium border transition-colors"
-                              style={{
-                                background: (lifestyleDraft.petCareSupport ?? []).includes(opt) ? "var(--color-primary)" : "var(--color-surface)",
-                                color: (lifestyleDraft.petCareSupport ?? []).includes(opt) ? "white" : "var(--color-text)",
-                                borderColor: "var(--color-border)",
-                              }}
-                            >
-                              {opt.replace(/-/g, " ")}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </Card>
+                        <p className="text-sm text-gray-500 mb-1">Energy: {adopterProfile?.lifestyle?.preferredEnergyLevel || "No preference"}</p>
+                        <p className="text-sm text-gray-500">Size: {adopterProfile?.lifestyle?.preferredSize || "No preference"}</p>
+                      </Card>
+                    </div>
 
-                    {/* Section C: Preferences */}
-                    <Card padding="lg">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-lg font-bold" style={{ color: "var(--color-text)" }}>Preferences</h4>
-                        {adopterProfileEditing !== "preferences" ? (
-                          <Button variant="outline" icon={<Edit2 className="w-4 h-4" />} onClick={() => setAdopterProfileEditing("preferences")}>Edit</Button>
-                        ) : (
-                          <div className="flex gap-2">
-                            <Button variant="outline" onClick={() => setAdopterProfileEditing(null)}>Cancel</Button>
-                            <Button variant="primary" icon={<Save className="w-4 h-4" />} onClick={() => saveAdopterSection("lifestyle", { lifestyle: { ...lifestyleDraft, ...preferencesDraft } })} disabled={adopterProfileSaving}>Save</Button>
-                          </div>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium mb-1" style={{ color: "var(--color-text)" }}>Preferred Energy Level</label>
-                          <select disabled={adopterProfileEditing !== "preferences"} className="w-full px-3 py-2 border-2 rounded-xl" style={{ borderColor: "var(--color-border)", background: "var(--color-card)", color: "var(--color-text)" }} value={preferencesDraft.preferredEnergyLevel ?? ""} onChange={(e) => setPreferencesDraft((p: any) => ({ ...p, preferredEnergyLevel: e.target.value }))}>
-                            <option value="">Select</option>
-                            <option value="low">Low energy</option>
-                            <option value="moderate">Moderate</option>
-                            <option value="high">High energy</option>
-                            <option value="no-preference">No preference</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1" style={{ color: "var(--color-text)" }}>Preferred Size</label>
-                          <select disabled={adopterProfileEditing !== "preferences"} className="w-full px-3 py-2 border-2 rounded-xl" style={{ borderColor: "var(--color-border)", background: "var(--color-card)", color: "var(--color-text)" }} value={preferencesDraft.preferredSize ?? ""} onChange={(e) => setPreferencesDraft((p: any) => ({ ...p, preferredSize: e.target.value }))}>
-                            <option value="">Select</option>
-                            <option value="small">Small</option>
-                            <option value="medium">Medium</option>
-                            <option value="large">Large</option>
-                            <option value="no-preference">No preference</option>
-                          </select>
-                        </div>
-                      </div>
-                    </Card>
-
-                    {/* Section D: Financial & Stability */}
-                    <Card padding="lg">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-lg font-bold" style={{ color: "var(--color-text)" }}>Financial &amp; Stability</h4>
-                        {adopterProfileEditing !== "financial" ? (
-                          <Button variant="outline" icon={<Edit2 className="w-4 h-4" />} onClick={() => setAdopterProfileEditing("financial")}>Edit</Button>
-                        ) : (
-                          <div className="flex gap-2">
-                            <Button variant="outline" onClick={() => setAdopterProfileEditing(null)}>Cancel</Button>
-                            <Button variant="primary" icon={<Save className="w-4 h-4" />} onClick={() => saveAdopterSection("lifestyle", { lifestyle: { ...lifestyleDraft, ...financialDraft } })} disabled={adopterProfileSaving}>Save</Button>
-                          </div>
-                        )}
-                      </div>
-                      <div className="mb-4">
-                        <label className="block text-sm font-medium mb-1" style={{ color: "var(--color-text)" }}>Monthly Pet Budget</label>
-                        <select disabled={adopterProfileEditing !== "financial"} className="w-full px-3 py-2 border-2 rounded-xl" style={{ borderColor: "var(--color-border)", background: "var(--color-card)", color: "var(--color-text)" }} value={financialDraft.monthlyPetBudget ?? ""} onChange={(e) => setFinancialDraft((p: any) => ({ ...p, monthlyPetBudget: e.target.value }))}>
-                          <option value="">Select</option>
-                          <option value="under-5000">Under Rs 5,000/month</option>
-                          <option value="5000-10000">Rs 5,000–10,000/month</option>
-                          <option value="10000-20000">Rs 10,000–20,000/month</option>
-                          <option value="over-20000">Over Rs 20,000/month</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-2" style={{ color: "var(--color-text)" }}>Upcoming Life Changes (optional)</label>
-                        <div className="flex flex-wrap gap-2">
-                          {["moving-home", "expecting-baby", "extended-travel", "job-change", "other"].map((opt) => (
-                            <button
-                              key={opt}
-                              type="button"
-                              disabled={adopterProfileEditing !== "financial"}
-                              onClick={() => {
-                                const current: string[] = financialDraft.upcomingLifeChanges ?? [];
-                                setFinancialDraft((p: any) => ({ ...p, upcomingLifeChanges: current.includes(opt) ? current.filter((x: string) => x !== opt) : [...current, opt] }));
-                              }}
-                              className="px-3 py-1 rounded-full text-sm font-medium border transition-colors"
-                              style={{
-                                background: (financialDraft.upcomingLifeChanges ?? []).includes(opt) ? "var(--color-warning, #f59e0b)" : "var(--color-surface)",
-                                color: (financialDraft.upcomingLifeChanges ?? []).includes(opt) ? "white" : "var(--color-text)",
-                                borderColor: "var(--color-border)",
-                              }}
-                            >
-                              {opt.replace(/-/g, " ")}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </Card>
+                    <div className="flex justify-end mt-4">
+                       <Button 
+                         variant="primary" 
+                         size="lg" 
+                         icon={<Edit2 className="w-4 h-4" />}
+                         onClick={() => setShowAdopterModal(true)}
+                       >
+                         {adopterProfile?.completionTier === "enhanced" ? "Update Profile" : "Complete Profile"}
+                       </Button>
+                    </div>
                   </>
                 )}
               </div>
@@ -1096,116 +985,7 @@ export function UserProfilePage() {
               </Card>
             )}
 
-            {/* Saved Pets Tab */}
-            {activeTab === "saved" && (
-              <Card padding="lg">
-                <h3
-                  className="text-2xl font-bold mb-6"
-                  style={{ color: "var(--color-text)" }}
-                >
-                  Saved Pets ({user?.favoritePets?.length || 0})
-                </h3>
 
-                {user?.favoritePets?.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Heart
-                      className="w-16 h-16 mx-auto mb-4"
-                      style={{ color: "var(--color-text-light)" }}
-                    />
-                    <h4
-                      className="text-xl font-semibold mb-2"
-                      style={{ color: "var(--color-text)" }}
-                    >
-                      No saved pets yet
-                    </h4>
-                    <p style={{ color: "var(--color-text-light)" }}>
-                      Start browsing and save your favorite pets!
-                    </p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {user?.favoritePets?.map((pet: any, index: number) => (
-                      <motion.div
-                        key={pet._id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.1 }}
-                      >
-                        <Link to={`/pet/${pet._id}`} className="block">
-                          <Card padding="md" hover>
-                            <div className="flex gap-4 relative">
-                              <img
-                                src={
-                                  pet.images?.[0] ||
-                                  "https://via.placeholder.com/150"
-                                }
-                                alt={pet.name}
-                                className="w-24 h-24 rounded-xl object-cover"
-                              />
-                              <div className="flex-1">
-                                <h4
-                                  className="font-bold mb-1"
-                                  style={{ color: "var(--color-text)" }}
-                                >
-                                  {pet.name}
-                                </h4>
-                                <p
-                                  className="text-sm mb-2"
-                                  style={{ color: "var(--color-text-light)" }}
-                                >
-                                  {pet.breed} • {pet.age}{" "}
-                                  {pet.age === 1 ? "Year" : "Years"}
-                                </p>
-                                <div className="flex gap-2">
-                                  <Badge variant="info">{pet.gender}</Badge>
-                                  <Badge variant="neutral">{pet.size}</Badge>
-                                </div>
-                              </div>
-                              <button
-                                onClick={async (e) => {
-                                  e.preventDefault(); // Prevent navigation
-                                  e.stopPropagation();
-                                  try {
-                                    const response = await axios.put(
-                                      `http://localhost:5000/api/auth/profile/favorites/${pet._id}`,
-                                      {},
-                                      {
-                                        headers: {
-                                          Authorization: `Bearer ${token}`,
-                                        },
-                                      }
-                                    );
-                                    if (response.status === 200) {
-                                      showToast(
-                                        "Removed from favorites",
-                                        "success"
-                                      );
-                                      await refreshUser();
-                                    }
-                                  } catch (error) {
-                                    console.error(
-                                      "Error removing favorite:",
-                                      error
-                                    );
-                                    showToast(
-                                      "Failed to remove favorite",
-                                      "error"
-                                    );
-                                  }
-                                }}
-                                className="absolute top-0 right-0 p-2 rounded-full hover:bg-red-50 transition-colors group z-10"
-                              >
-                                <Heart className="w-5 h-5 fill-current text-red-500 transition-transform group-hover:scale-110" />
-                              </button>
-                            </div>
-                          </Card>
-                        </Link>
-                      </motion.div>
-                    ))}
-                  </div>
-                )}
-              </Card>
-            )}
 
             {/* Donation History Tab */}
             {activeTab === "donations" && (
@@ -1344,13 +1124,13 @@ export function UserProfilePage() {
                                     <div className="flex flex-col gap-2 mt-2">
                                       <textarea 
                                         value={editMessageText}
-                                        onChange={(e) => setEditMessageText(e.target.value.slice(0, 120))}
+                                        onChange={(e) => setEditMessageText(e.target.value.slice(0, 150))}
                                         placeholder="Write a short supportive message..."
                                         className="w-full text-sm p-3 rounded-xl border focus:border-[var(--color-primary)] outline-none resize-none bg-gray-50"
                                         rows={2}
                                       />
                                       <div className="flex justify-between items-center">
-                                        <span className="text-xs text-gray-400">{editMessageText.length}/120</span>
+                                        <span className="text-xs text-gray-400">{editMessageText.length}/150</span>
                                         <div className="flex gap-2">
                                           <Button variant="outline" size="sm" onClick={() => setEditingMessageId(null)} disabled={savingMessage}>Cancel</Button>
                                           <Button variant="primary" size="sm" onClick={() => handleSaveMessage(donation._id)} disabled={savingMessage}>{savingMessage ? "Saving..." : "Save"}</Button>
@@ -1388,13 +1168,15 @@ export function UserProfilePage() {
                                         >
                                           View Receipt
                                         </button>
-                                        <button 
-                                          onClick={() => { setEditingMessageId(donation._id); setEditMessageText(donation.message || ""); }}
-                                          className="text-xs font-semibold px-4 py-2 rounded-full transition-colors shadow-sm"
-                                          style={{ color: "var(--color-primary)", border: "1px solid color-mix(in srgb, var(--color-primary) 20%, transparent)", backgroundColor: "var(--color-card)" }}
-                                        >
-                                          {donation.message ? "Edit Message" : "Leave a Message 💬"}
-                                        </button>
+                                        {!donation.message && (
+                                          <button 
+                                            onClick={() => { setEditingMessageId(donation._id); setEditMessageText(""); }}
+                                            className="text-xs font-semibold px-4 py-2 rounded-full transition-colors shadow-sm"
+                                            style={{ color: "var(--color-primary)", border: "1px solid color-mix(in srgb, var(--color-primary) 20%, transparent)", backgroundColor: "var(--color-card)" }}
+                                          >
+                                            Leave a Message 💬
+                                          </button>
+                                        )}
                                       </div>
                                     </div>
                                   )}
@@ -1447,174 +1229,109 @@ export function UserProfilePage() {
               </div>
             )}
 
-            {/* Adoption History Tab */}
             {activeTab === "history" && (
               <Card padding="lg">
-                <h3
-                  className="text-2xl font-bold mb-6"
-                  style={{
-                    color: "var(--color-text)",
-                  }}
-                >
-                  Adoption History ({adoptionHistory.length})
-                </h3>
-
-                <div className="space-y-4">
-                  {adoptionHistory.map((application, index) => {
-                    const config =
-                      statusConfig[
-                        application.status as keyof typeof statusConfig
-                      ];
-                    const StatusIcon = config.icon;
-                    return (
-                      <motion.div
-                        key={application.id}
-                        initial={{
-                          opacity: 0,
-                          x: -20,
-                        }}
-                        animate={{
-                          opacity: 1,
-                          x: 0,
-                        }}
-                        transition={{
-                          delay: index * 0.1,
-                        }}
-                      >
-                        <Card padding="md">
-                          <div className="flex items-center gap-4">
-                            <img
-                              src={application.petImage}
-                              alt={application.petName}
-                              className="w-20 h-20 rounded-xl object-cover"
-                            />
-                            <div className="flex-1">
-                              <div className="flex items-start justify-between mb-2">
-                                <div>
-                                  <h4
-                                    className="font-bold"
-                                    style={{
-                                      color: "var(--color-text)",
-                                    }}
-                                  >
-                                    {application.petName}
-                                  </h4>
-                                  <p
-                                    className="text-sm"
-                                    style={{
-                                      color: "var(--color-text-light)",
-                                    }}
-                                  >
-                                    {application.shelter}
-                                  </p>
-                                </div>
-                                <Badge variant={config.variant}>
-                                  <StatusIcon className="w-3 h-3 mr-1" />
-                                  {config.label}
-                                </Badge>
-                              </div>
-                              <div
-                                className="flex items-center gap-2 text-sm"
-                                style={{
-                                  color: "var(--color-text-light)",
-                                }}
-                              >
-                                <Calendar className="w-4 h-4" />
-                                <span>
-                                  Applied on{" "}
-                                  {new Date(
-                                    application.date
-                                  ).toLocaleDateString("en-US", {
-                                    month: "short",
-                                    day: "numeric",
-                                    year: "numeric",
-                                  })}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </Card>
-                      </motion.div>
-                    );
-                  })}
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-2xl font-bold" style={{ color: "var(--color-text)" }}>
+                    Adoption History ({adoptionHistory.length})
+                  </h3>
+                  {loadingHistory && <Loader2 className="w-5 h-5 animate-spin text-primary" />}
                 </div>
-              </Card>
-            )}
 
-            {/* Notifications List Tab */}
-            {activeTab === "notifications" && (
-              <Card padding="lg">
-                <h3
-                  className="text-2xl font-bold mb-6"
-                  style={{ color: "var(--color-text)" }}
-                >
-                  Notifications
-                </h3>
-                <div className="space-y-4">
-                  {notificationList.length > 0 ? (
-                    notificationList.map((notification) => (
-                      <div
-                        key={notification._id}
-                        className={`p-4 rounded-xl border transition-all ${
-                          !notification.read
-                            ? "bg-blue-50 border-blue-100"
-                            : "bg-[var(--color-surface)] border-transparent"
-                        }`}
-                        onClick={() =>
-                          !notification.read && markAsRead(notification._id)
-                        }
-                      >
-                        <div className="flex gap-4">
-                          <div
-                            className={`p-2 rounded-full h-fit ${
-                              !notification.read
-                                ? "bg-white text-blue-500"
-                                : "bg-gray-100 text-gray-500"
-                            }`}
-                          >
-                            <Bell className="w-5 h-5" />
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex justify-between items-start">
-                              <h4
-                                className={`font-medium mb-1 ${
-                                  !notification.read
-                                    ? "text-[var(--color-text)] font-bold"
-                                    : "text-[var(--color-text-light)]"
-                                }`}
-                              >
-                                {notification.title}
-                              </h4>
-                              <span className="text-xs text-[var(--color-text-light)]">
-                                {new Date(
-                                  notification.createdAt
-                                ).toLocaleDateString()}
-                              </span>
-                            </div>
-                            <p className="text-sm text-[var(--color-text-light)]">
-                              {notification.message}
-                            </p>
-                          </div>
+                {loadingHistory ? (
+                  <div className="space-y-4">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="flex gap-4 animate-pulse">
+                        <div className="w-20 h-20 rounded-xl bg-gray-200" />
+                        <div className="flex-1 space-y-2 py-1">
+                          <div className="h-4 bg-gray-200 rounded w-1/4" />
+                          <div className="h-3 bg-gray-200 rounded w-1/3" />
+                          <div className="h-3 bg-gray-200 rounded w-1/2" />
                         </div>
                       </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-12">
-                      <Bell
-                        className="w-12 h-12 mx-auto mb-3 opacity-20"
-                        style={{ color: "var(--color-text)" }}
-                      />
-                      <p
-                        className="text-sm font-medium"
-                        style={{ color: "var(--color-text-light)" }}
-                      >
-                        No notifications yet
-                      </p>
+                    ))}
+                  </div>
+                ) : adoptionHistory.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="w-20 h-20 rounded-full bg-gray-50 flex items-center justify-center mx-auto mb-4">
+                      <FileText className="w-10 h-10 text-gray-300" />
                     </div>
-                  )}
-                </div>
+                    <h4 className="font-bold text-gray-900 mb-1">No applications yet</h4>
+                    <p className="text-gray-500 mb-6">Start your journey by applying to adopt a pet!</p>
+                    <Button variant="primary" onClick={() => navigate("/pets")}>Browse Pets</Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {adoptionHistory.map((application, index) => {
+                      const statusKey = application.status as keyof typeof statusConfig;
+                      const config = statusConfig[statusKey] || statusConfig.pending;
+                      const StatusIcon = config.icon;
+                      
+                      const petName = application.pet?.name || "Unknown Pet";
+                      const petImage = application.pet?.images?.[0] || "https://via.placeholder.com/200";
+                      const shelterName = application.shelter?.name || "Private Rescuer";
+
+                      return (
+                        <motion.div
+                          key={application._id}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.1 }}
+                        >
+                          <Card padding="md">
+                            <div className="flex items-center gap-4">
+                              <img
+                                src={petImage}
+                                alt={petName}
+                                className="w-20 h-20 rounded-xl object-cover border border-gray-100"
+                              />
+                              <div className="flex-1">
+                                <div className="flex items-start justify-between mb-2">
+                                  <div>
+                                    <h4 className="font-bold" style={{ color: "var(--color-text)" }}>
+                                      {petName}
+                                    </h4>
+                                    <p className="text-sm" style={{ color: "var(--color-text-light)" }}>
+                                      {shelterName}
+                                    </p>
+                                  </div>
+                                  <Badge variant={config.variant}>
+                                    <StatusIcon className="w-3 h-3 mr-1" />
+                                    {config.label}
+                                  </Badge>
+                                </div>
+                                <div className="flex items-center gap-4 text-xs" style={{ color: "var(--color-text-light)" }}>
+                                  <div className="flex items-center gap-1">
+                                    <Calendar className="w-3.5 h-3.5" />
+                                    <span>Applied on {new Date(application.createdAt).toLocaleDateString()}</span>
+                                  </div>
+                                  <Link 
+                                    to={`/application-tracking/${application._id}`}
+                                    className="text-primary font-semibold hover:underline"
+                                  >
+                                    Track Status →
+                                  </Link>
+                                  {(application.status === 'pending' || application.status === 'reviewing') && (
+                                    <button 
+                                      onClick={() => handleCancelApplication(application._id)}
+                                      className="text-red-500 font-semibold hover:text-red-600 transition-colors"
+                                    >
+                                      Withdraw
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </Card>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                )}
               </Card>
             )}
+
+
 
             {/* Preferences Tab (was Notifications) */}
             {activeTab === "preferences" && (
@@ -1849,6 +1566,18 @@ export function UserProfilePage() {
           isOpen={showLogoutModal}
           onClose={() => setShowLogoutModal(false)}
           onConfirm={handleLogout}
+        />
+
+        <AdopterProfileEditorModal
+          isOpen={showAdopterModal}
+          onClose={() => setShowAdopterModal(false)}
+          onComplete={(updatedProfile) => {
+            setAdopterProfile(updatedProfile);
+            setShowAdopterModal(false);
+          }}
+          token={token || ""}
+          initialStep={adopterModalStep}
+          profileData={adopterProfile}
         />
 
         <DonationReceiptModal

@@ -11,6 +11,8 @@ import {
   PawPrint,
   Check,
   X,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { Card } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
@@ -26,8 +28,11 @@ export function SignUpPage() {
     email: "",
     phone: "",
     password: "",
+    confirmPassword: "",
     address: "",
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -45,13 +50,13 @@ export function SignUpPage() {
         label: "",
         color: "",
       };
-    if (password.length < 6)
+    if (password.length < 16)
       return {
         strength: 1,
         label: "Weak",
         color: "var(--color-error)",
       };
-    if (password.length < 10)
+    if (password.length < 20)
       return {
         strength: 2,
         label: "Medium",
@@ -89,6 +94,18 @@ export function SignUpPage() {
 
     if (!formData.password.trim()) {
       showToast("Please enter a password", "error");
+      setIsLoading(false);
+      return;
+    }
+
+    if (formData.password.length < 16) {
+      showToast("Password must be at least 16 characters long", "error");
+      setIsLoading(false);
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      showToast("Passwords do not match", "error");
       setIsLoading(false);
       return;
     }
@@ -609,7 +626,7 @@ export function SignUpPage() {
 
                     <div>
                       <Input
-                        type="password"
+                        type={showPassword ? "text" : "password"}
                         label="Password"
                         placeholder="Create a strong password"
                         value={formData.password}
@@ -617,11 +634,24 @@ export function SignUpPage() {
                           handleInputChange("password", e.target.value)
                         }
                         icon={<Lock className="w-5 h-5" />}
+                        rightElement={
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="p-1 hover:bg-[var(--color-surface)] rounded-md transition-colors"
+                          >
+                            {showPassword ? (
+                              <EyeOff className="w-5 h-5" />
+                            ) : (
+                              <Eye className="w-5 h-5" />
+                            )}
+                          </button>
+                        }
                         fullWidth
                         required
                       />
                       {formData.password && (
-                        <div className="mt-2">
+                        <div className="mt-2 text-xs">
                           <div className="flex items-center gap-2 mb-1">
                             <div
                               className="flex-1 h-1 rounded-full"
@@ -650,23 +680,23 @@ export function SignUpPage() {
                           </div>
                           <div className="space-y-1">
                             <div
-                              className="flex items-center gap-2 text-xs"
+                              className="flex items-center gap-2"
                               style={{
                                 color:
-                                  formData.password.length >= 8
+                                  formData.password.length >= 16
                                     ? "var(--color-success)"
                                     : "var(--color-text-light)",
                               }}
                             >
-                              {formData.password.length >= 8 ? (
+                              {formData.password.length >= 16 ? (
                                 <Check className="w-3 h-3" />
                               ) : (
                                 <X className="w-3 h-3" />
                               )}
-                              <span>At least 8 characters</span>
+                              <span>At least 16 characters</span>
                             </div>
                             <div
-                              className="flex items-center gap-2 text-xs"
+                              className="flex items-center gap-2"
                               style={{
                                 color: /[A-Z]/.test(formData.password)
                                   ? "var(--color-success)"
@@ -681,7 +711,7 @@ export function SignUpPage() {
                               <span>One uppercase letter</span>
                             </div>
                             <div
-                              className="flex items-center gap-2 text-xs"
+                              className="flex items-center gap-2"
                               style={{
                                 color: /\d/.test(formData.password)
                                   ? "var(--color-success)"
@@ -699,6 +729,34 @@ export function SignUpPage() {
                         </div>
                       )}
                     </div>
+
+                    <Input
+                      type={showConfirmPassword ? "text" : "password"}
+                      label="Confirm Password"
+                      placeholder="Repeat your password"
+                      value={formData.confirmPassword}
+                      onChange={(e) =>
+                        handleInputChange("confirmPassword", e.target.value)
+                      }
+                      icon={<Lock className="w-5 h-5" />}
+                      rightElement={
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setShowConfirmPassword(!showConfirmPassword)
+                          }
+                          className="p-1 hover:bg-[var(--color-surface)] rounded-md transition-colors"
+                        >
+                          {showConfirmPassword ? (
+                            <EyeOff className="w-5 h-5" />
+                          ) : (
+                            <Eye className="w-5 h-5" />
+                          )}
+                        </button>
+                      }
+                      fullWidth
+                      required
+                    />
 
                     <div
                       className="text-sm"

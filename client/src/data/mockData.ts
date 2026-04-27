@@ -3,8 +3,10 @@ export interface Pet {
   name: string;
   species: 'dog' | 'cat' | 'bird' | 'rabbit';
   breed: string;
-  age: string;
-  ageInMonths: number;
+  age: {
+    years: number;
+    months: number;
+  };
   size: 'small' | 'medium' | 'large';
   gender: 'male' | 'female';
   location: string;
@@ -33,6 +35,13 @@ export interface Pet {
     lastVetCheckup?: string;
     notes?: string;
     medicalNotes?: string;
+    vaccinations?: {
+      name: string;
+      dateAdministered: string;
+      nextDueDate?: string;
+      administeredBy?: string;
+    }[];
+    vaccinationStatus?: string;
   };
   shelter: {
     name: string;
@@ -72,8 +81,7 @@ export const mockPets: Pet[] = [{
   name: 'Luna',
   species: 'dog',
   breed: 'Golden Retriever Mix',
-  age: '2 years',
-  ageInMonths: 24,
+  age: { years: 2, months: 0 },
   size: 'large',
   gender: 'female',
   location: 'Kathmandu',
@@ -106,8 +114,7 @@ export const mockPets: Pet[] = [{
   name: 'Whiskers',
   species: 'cat',
   breed: 'Domestic Shorthair',
-  age: '1 year',
-  ageInMonths: 12,
+  age: { years: 1, months: 0 },
   size: 'small',
   gender: 'male',
   location: 'Lalitpur',
@@ -140,8 +147,7 @@ export const mockPets: Pet[] = [{
   name: 'Max',
   species: 'dog',
   breed: 'German Shepherd',
-  age: '3 years',
-  ageInMonths: 36,
+  age: { years: 3, months: 0 },
   size: 'large',
   gender: 'male',
   location: 'Bhaktapur',
@@ -174,8 +180,7 @@ export const mockPets: Pet[] = [{
   name: 'Bella',
   species: 'cat',
   breed: 'Persian Mix',
-  age: '6 months',
-  ageInMonths: 6,
+  age: { years: 0, months: 6 },
   size: 'small',
   gender: 'female',
   location: 'Kathmandu',
@@ -208,8 +213,7 @@ export const mockPets: Pet[] = [{
   name: 'Charlie',
   species: 'dog',
   breed: 'Beagle',
-  age: '1 year',
-  ageInMonths: 12,
+  age: { years: 1, months: 0 },
   size: 'medium',
   gender: 'male',
   location: 'Pokhara',
@@ -242,8 +246,7 @@ export const mockPets: Pet[] = [{
   name: 'Mittens',
   species: 'cat',
   breed: 'Tabby',
-  age: '3 months',
-  ageInMonths: 3,
+  age: { years: 0, months: 3 },
   size: 'small',
   gender: 'female',
   location: 'Lalitpur',
@@ -276,8 +279,7 @@ export const mockPets: Pet[] = [{
   name: 'Rocky',
   species: 'dog',
   breed: 'Labrador Mix',
-  age: '4 years',
-  ageInMonths: 48,
+  age: { years: 4, months: 0 },
   size: 'large',
   gender: 'male',
   location: 'Kathmandu',
@@ -310,8 +312,7 @@ export const mockPets: Pet[] = [{
   name: 'Simba',
   species: 'cat',
   breed: 'Orange Tabby',
-  age: '2 years',
-  ageInMonths: 24,
+  age: { years: 2, months: 0 },
   size: 'medium',
   gender: 'male',
   location: 'Bhaktapur',
