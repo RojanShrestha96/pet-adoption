@@ -1,10 +1,12 @@
 import express from "express";
+// DEBUG: Triggering restart for AdoptionPayment model update
 import cors from "cors";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import authRoutes from "./routes/authRoutes.js";
+import profileRoutes from "./routes/profileRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import shelterRoutes from "./routes/shelterRoutes.js";
 import messageRoutes from "./routes/messageRoutes.js";
@@ -17,6 +19,8 @@ import donationRoutes, { rotateFeaturedPet } from "./routes/donationRoutes.js";
 import settingsRoutes from "./routes/settingsRoutes.js";
 import geoRoutes from "./routes/geoRoutes.js";
 import testRoutes from "./routes/testRoutes.js";
+import storyRoutes from "./routes/storyRoutes.js";
+import { startVaccinationReminderJob } from "./services/vaccinationReminderService.js";
 
 dotenv.config();
 
@@ -39,6 +43,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // API Routes
 app.use("/api/auth", authRoutes);
+app.use("/api/profiles", profileRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/shelter", shelterRoutes);
 app.use("/api/messages", messageRoutes);
@@ -51,13 +56,15 @@ app.use("/api/donations", donationRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/geocode", geoRoutes);       // Public geocoding endpoint
 app.use("/api/test", testRoutes);         // Internal test utility
+app.use("/api/stories", storyRoutes);
+
 
 // MongoDB connection
 // MongoDB connection
 const connectDB = async () => {
   try {
     const uri = process.env.MONGO_URI;
-    console.log(`Attempting to connect to MongoDB at: ${uri ? uri.replace(/:([^:@]+)@/, ':****@') : 'UNDEFINED'}`);
+    // console.log(`Attempting to connect to MongoDB at: ${uri ? uri.replace(/:([^:@]+)@/, ':****@') : 'UNDEFINED'}`);
     const conn = await mongoose.connect(uri, {
         serverSelectionTimeoutMS: 5000
     });
@@ -193,4 +200,7 @@ connectDB().then(() => {
     rotateFeaturedPet().catch(console.error);
   }, SIX_HOURS_MS);
   console.log("[FeaturedPet] Rotation job started (every 6h)");
+
+  // Vaccination reminders — runs daily
+  startVaccinationReminderJob();
 });

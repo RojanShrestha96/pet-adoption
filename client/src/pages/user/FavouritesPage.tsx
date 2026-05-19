@@ -13,6 +13,7 @@ export function FavouritesPage() {
   const { user, refreshUser, isLoading: authLoading } = useAuth();
   const [favouritePets, setFavouritePets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [recommendedPets, setRecommendedPets] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchFavourites = async () => {
@@ -42,6 +43,37 @@ export function FavouritesPage() {
         fetchFavourites();
     }
   }, [user, authLoading]);
+
+  // Fetch recommended pets (pets that are available and not already in favourites)
+  useEffect(() => {
+    const fetchRecommendations = async () => {
+      try {
+        const response = await api.get("/pets?limit=20");
+        const petsList = response.data.pets || response.data || [];
+        const favIds = new Set(favouritePets.map(p => (p._id || p.id || "").toString()));
+        const filtered = petsList.filter((p: any) => {
+          const id = (p._id || p.id || "").toString();
+          return !favIds.has(id) && p.adoptionStatus === "available";
+        });
+        const shuffled = filtered.sort(() => 0.5 - Math.random());
+        setRecommendedPets(shuffled.slice(0, 3));
+      } catch (err) {
+        console.error("Failed to fetch recommended pets:", err);
+        // Fallback to mockPets
+        const favIds = new Set(favouritePets.map(p => (p._id || p.id || "").toString()));
+        const filteredMock = mockPets.filter((p: any) => {
+          const id = (p._id || p.id || "").toString();
+          return !favIds.has(id) && p.adoptionStatus === "available";
+        });
+        const shuffledMock = filteredMock.sort(() => 0.5 - Math.random());
+        setRecommendedPets(shuffledMock.slice(0, 3));
+      }
+    };
+
+    if (!loading) {
+      fetchRecommendations();
+    }
+  }, [favouritePets, loading]);
 
   const handleRemoveAll = async () => {
     if (window.confirm("Remove all favourites?")) {
@@ -199,6 +231,22 @@ export function FavouritesPage() {
               {favouritePets.map((pet, index) => (
                 <PetCard key={pet._id || pet.id} pet={pet} index={index} />
               ))}
+            </div>
+          )}
+
+          {/* Recommended Pets Section */}
+          {recommendedPets.length > 0 && (
+            <div className="mt-16 pt-12 border-t border-gray-200">
+              <div className="mb-8">
+                <h2 className="text-2xl font-bold text-gray-900">Pets You Might Want to Adopt</h2>
+                <p className="text-sm text-gray-500">Available pets selected just for you</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {recommendedPets.map((pet, index) => (
+                  <PetCard key={pet._id || pet.id} pet={pet} index={index} />
+                ))}
+              </div>
             </div>
           )}
         </motion.div>

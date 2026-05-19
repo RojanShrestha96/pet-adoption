@@ -36,7 +36,6 @@ import { ApplicationAlreadySubmittedPage } from "./pages/adoption/ApplicationAlr
 import { MeetAndGreetPage } from "./pages/adoption/MeetAndGreetPage";
 import { ForgotPasswordPage } from "./pages/auth/ForgotPasswordPage";
 import { ResetPasswordPage } from "./pages/auth/ResetPasswordPage";
-import { AdminAddPetPage } from "./pages/admin/AdminAddPetPage";
 import { UserProfilePage } from "./pages/user/UserProfilePage";
 import { ShelterProfilePage } from "./pages/shelter/ShelterProfilePage";
 import { ShelterMessagesPage } from "./pages/shelter/ShelterMessagesPage";
@@ -53,6 +52,8 @@ import { ScrollToTop } from "./components/layout/ScrollToTop";
 import { GeoTestPage } from "./pages/public/GeoTestPage";
 import { AdoptionPaymentSuccess } from "./pages/adoption/AdoptionPaymentSuccess";
 import { AdoptionPaymentFailure } from "./pages/adoption/AdoptionPaymentFailure";
+import { AdoptionGuidePage } from "./pages/public/AdoptionGuidePage";
+import { FAQPage } from "./pages/public/FAQPage";
 
 export function App() {
   return (
@@ -230,6 +231,30 @@ export function App() {
                   path="/geo-test"
                   element={<GeoTestPage />}
                 />
+                <Route
+                  path="/adoption-guide"
+                  element={
+                    <div className="min-h-screen flex flex-col">
+                      <Navbar />
+                      <main className="flex-1">
+                        <AdoptionGuidePage />
+                      </main>
+                      <Footer />
+                    </div>
+                  }
+                />
+                <Route
+                  path="/faq"
+                  element={
+                    <div className="min-h-screen flex flex-col">
+                      <Navbar />
+                      <main className="flex-1">
+                        <FAQPage />
+                      </main>
+                      <Footer />
+                    </div>
+                  }
+                />
 
                 {/* ================= ADOPTER ONLY ROUTES ================= */}
                 <Route
@@ -399,13 +424,14 @@ export function App() {
                   }
                 />
                 <Route
-                  path="/admin/add-pet"
+                  path="/admin/shelters/:id"
                   element={
                     <ProtectedRoute allowedRoles={["admin"]}>
-                      <AdminAddPetPage />
+                      <AdminShelterDetailsPage />
                     </ProtectedRoute>
                   }
                 />
+
               </Routes>
             </BrowserRouter>
               </SocketProvider>

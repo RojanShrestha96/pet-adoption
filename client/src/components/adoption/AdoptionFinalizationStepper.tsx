@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { CreditCard, FileSignature, CheckCircle, PackageCheck, AlertCircle, Loader2, Download, Heart, MapPin, Phone, Share2, ChevronDown, ChevronUp } from "lucide-react";
+import { CreditCard, FileSignature, CheckCircle, PackageCheck, AlertCircle, Loader2, Download, Heart, MapPin, Phone, Share2, ChevronDown, ChevronUp, XCircle } from "lucide-react";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { useToast } from "../ui/Toast";
@@ -123,6 +123,46 @@ export function AdoptionFinalizationStepper({ applicationId, application, onRefr
     signed: null,
   });
   const [isExpanded, setIsExpanded] = useState(true);
+
+  // Story submission state
+  const [showStoryModal, setShowStoryModal] = useState(false);
+  const [storyText, setStoryText] = useState("");
+  const [quoteText, setQuoteText] = useState("");
+  const [submittingStory, setSubmittingStory] = useState(false);
+  const [storySubmitted, setStorySubmitted] = useState(false);
+
+  const handleSubmitStory = async () => {
+    if (!storyText.trim()) {
+      showToast("Please write your story before submitting.", "error");
+      return;
+    }
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    try {
+      setSubmittingStory(true);
+      const res = await fetch("http://localhost:5000/api/stories/submit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          applicationId,
+          story: storyText,
+          quote: quoteText,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to submit story");
+      showToast("Your story has been published! 🎉", "success");
+      setShowStoryModal(false);
+      setStorySubmitted(true);
+    } catch (err: any) {
+      showToast(err.message || "Could not submit your story.", "error");
+    } finally {
+      setSubmittingStory(false);
+    }
+  };
 
   const status = application.status;
   const finalization = application.finalization || {};
@@ -463,9 +503,16 @@ export function AdoptionFinalizationStepper({ applicationId, application, onRefr
                  <p className="text-gray-600 mb-8">Congratulations on adopting {application.pet?.name}! We wish you both a lifetime of happiness.</p>
                  
                  <div className="flex flex-col gap-3 max-w-xs mx-auto">
-                   <Button variant="primary" className="w-full shadow-lg shadow-blue-500/20" icon={<Share2 className="w-4 h-4" />} onClick={() => window.location.href = "/success-stories"}>
-                     Share Your Story
-                   </Button>
+                   {storySubmitted ? (
+                     <div className="flex items-center justify-center gap-2 text-green-700 font-semibold py-2">
+                       <CheckCircle className="w-5 h-5" />
+                       Story published!
+                     </div>
+                   ) : (
+                     <Button variant="primary" className="w-full shadow-lg shadow-blue-500/20" icon={<Share2 className="w-4 h-4" />} onClick={() => setShowStoryModal(true)}>
+                       Share Your Story
+                     </Button>
+                   )}
                    
                    {/* Provide download link if the status endpoint returned signedContractUrl */}
                    {contractUrls.signed && (
@@ -474,6 +521,63 @@ export function AdoptionFinalizationStepper({ applicationId, application, onRefr
                      </Button>
                    )}
                  </div>
+
+                 {/* Share Story Modal */}
+                 {showStoryModal && (
+                   <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.5)" }}>
+                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
+                       <div className="flex items-center justify-between mb-4">
+                         <h2 className="text-xl font-bold text-gray-900">Share Your Story</h2>
+                         <button onClick={() => setShowStoryModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                           <XCircle className="w-6 h-6" />
+                         </button>
+                       </div>
+
+                       <p className="text-sm text-gray-500 mb-4">
+                         Tell others about your experience adopting <strong>{application.pet?.name}</strong>. Your story might inspire someone else!
+                       </p>
+
+                       <div className="mb-4">
+                         <label className="block text-sm font-semibold text-gray-700 mb-1">Your Story *</label>
+                         <textarea
+                           rows={5}
+                           value={storyText}
+                           onChange={(e) => setStoryText(e.target.value)}
+                           placeholder={`Tell us how you found ${application.pet?.name} and how life has changed since...`}
+                           className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-400 resize-none"
+                         />
+                       </div>
+
+                       <div className="mb-6">
+                         <label className="block text-sm font-semibold text-gray-700 mb-1">Short Quote (optional)</label>
+                         <input
+                           type="text"
+                           value={quoteText}
+                           onChange={(e) => setQuoteText(e.target.value)}
+                           placeholder='e.g. "She ran to us the moment we walked in."'
+                           className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+                         />
+                       </div>
+
+                       <div className="flex gap-3 justify-end">
+                         <button
+                           onClick={() => setShowStoryModal(false)}
+                           className="px-5 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+                         >
+                           Cancel
+                         </button>
+                         <button
+                           onClick={handleSubmitStory}
+                           disabled={submittingStory || !storyText.trim()}
+                           className="px-6 py-2 rounded-xl bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-semibold transition-colors flex items-center gap-2"
+                         >
+                           {submittingStory ? <Loader2 className="w-4 h-4 animate-spin" /> : <Heart className="w-4 h-4" />}
+                           {submittingStory ? "Submitting..." : "Publish Story"}
+                         </button>
+                       </div>
+                     </div>
+                   </div>
+                 )}
                </div>
             </motion.div>
           )}

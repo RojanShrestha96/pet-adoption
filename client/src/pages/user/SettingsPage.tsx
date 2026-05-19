@@ -97,8 +97,18 @@ export function SettingsPage() {
     newPassword: "",
     confirmPassword: "",
   });
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [initialLocation, setInitialLocation] = useState({
+    lat: "",
+    lng: "",
+    formattedAddress: "",
+  });
 
   const [documents, setDocuments] = useState<any[]>([]);
+  const [originalFormData, setOriginalFormData] = useState<any>(null);
+  const [originalPreferences, setOriginalPreferences] = useState<any>(null);
+  const [originalTheme, setOriginalTheme] = useState<string>("");
+  const [originalDocuments, setOriginalDocuments] = useState<any[]>([]);
 
   // Fetch current data
   useEffect(() => {
@@ -109,7 +119,7 @@ export function SettingsPage() {
         });
         if (response.ok) {
           const data = await response.json();
-          setFormData({
+          const parsedFormData = {
             shelterName: data.name || "",
             email: data.email || "",
             phone: data.phone || "",
@@ -135,7 +145,9 @@ export function SettingsPage() {
 
             isVerified: data.isVerified || false,
             logo: data.logo || "",
-          });
+          };
+          setFormData(parsedFormData);
+          setOriginalFormData(parsedFormData);
 
           if (data.location) {
             let lat = data.location.lat;
@@ -146,20 +158,33 @@ export function SettingsPage() {
                lat = data.location.coordinates[1];
             }
 
-            setLocationData({
+            const locObj = {
               lat: lat || "",
               lng: lng || "",
               formattedAddress: data.location.formattedAddress || "",
-            });
+            };
+            setLocationData(locObj);
+            setInitialLocation(locObj);
           }
 
-          if (data.preferences) {
-            setPreferences((prev) => ({ ...prev, ...data.preferences }));
-          }
+          const parsedPreferences = {
+            notifications: {
+              email: true,
+              sms: false,
+              applicationUpdates: true,
+            },
+            publicVisibility: true,
+            ...(data.preferences || {}),
+          };
+          setPreferences(parsedPreferences);
+          setOriginalPreferences(parsedPreferences);
 
-          if (data.documentation) {
-            setDocuments(data.documentation);
-          }
+          const parsedDocs = data.documentation || [];
+          setDocuments(parsedDocs);
+          setOriginalDocuments(parsedDocs);
+
+          const parsedTheme = data.theme || "friendly";
+          setOriginalTheme(parsedTheme);
 
           // Sync theme
           if (data.theme && data.theme !== currentTheme) {
@@ -206,6 +231,11 @@ export function SettingsPage() {
 
       if (!response.ok) throw new Error("Failed to update");
 
+      setOriginalFormData(formData);
+      setOriginalPreferences(preferences);
+      setOriginalTheme(currentTheme);
+      setOriginalDocuments(documents);
+      setInitialLocation(locationData);
       showToast("Settings saved successfully!", "success");
     } catch (error) {
       console.error(error);
@@ -226,6 +256,7 @@ export function SettingsPage() {
     }
 
     try {
+      setIsChangingPassword(true);
       const response = await fetch(
         "http://localhost:5000/api/auth/change-password",
         {
@@ -256,6 +287,8 @@ export function SettingsPage() {
     } catch (error) {
       console.error("Failed to change password:", error);
       showToast("Failed to change password", "error");
+    } finally {
+      setIsChangingPassword(false);
     }
   };
 
@@ -438,6 +471,11 @@ export function SettingsPage() {
     
     showToast("Template download started", "success");
   };
+
+  const isProfileChanged = originalFormData ? JSON.stringify(formData) !== JSON.stringify(originalFormData) : false;
+  const isPreferencesChanged = originalPreferences ? (JSON.stringify(preferences) !== JSON.stringify(originalPreferences) || currentTheme !== originalTheme) : false;
+  const isDocumentsChanged = originalDocuments ? JSON.stringify(documents) !== JSON.stringify(originalDocuments) : false;
+  const isLocationChanged = locationData.formattedAddress !== initialLocation.formattedAddress;
 
   const tabs = [
     { id: "profile", label: "Profile", icon: User },
@@ -794,7 +832,7 @@ export function SettingsPage() {
                       <Button
                         variant="primary"
                         onClick={handleSave}
-                        disabled={isSaving}
+                        disabled={!isProfileChanged || isSaving}
                         icon={<Save className="w-4 h-4" />}
                       >
                         {isSaving ? "Saving..." : "Save Profile"}
@@ -857,8 +895,9 @@ export function SettingsPage() {
                         <Button
                           variant="primary"
                           onClick={handlePasswordChange}
+                          disabled={!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword || isChangingPassword}
                         >
-                          Change Password
+                          {isChangingPassword ? "Changing Password..." : "Change Password"}
                         </Button>
                       </div>
                     </div>
@@ -942,7 +981,7 @@ export function SettingsPage() {
                         <Button
                           variant="primary"
                           onClick={handleSave}
-                          disabled={isSaving}
+                          disabled={!isPreferencesChanged || isSaving}
                         >
                           Save Preferences
                         </Button>
@@ -1010,9 +1049,9 @@ export function SettingsPage() {
                       <Button
                         variant="primary"
                         onClick={handleSave}
-                        disabled={isSaving}
+                        disabled={!isLocationChanged || isSaving}
                       >
-                        Update Location
+                        {isSaving ? "Saving..." : "Update Location"}
                       </Button>
                     </div>
                   </Card>
@@ -1151,7 +1190,7 @@ export function SettingsPage() {
                       <Button
                         variant="primary"
                         onClick={handleSave}
-                        disabled={isSaving}
+                        disabled={!isDocumentsChanged || isSaving}
                       >
                         Save Changes
                       </Button>

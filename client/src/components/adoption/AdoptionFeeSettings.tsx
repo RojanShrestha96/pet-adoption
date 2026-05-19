@@ -26,6 +26,7 @@ export function AdoptionFeeSettings() {
     defaultFee: 0,
     speciesRates: [],
   });
+  const [originalFeeTable, setOriginalFeeTable] = useState<any>(null);
 
   useEffect(() => {
     fetchFeeTable();
@@ -36,6 +37,7 @@ export function AdoptionFeeSettings() {
       setLoading(true);
       const response = await api.get("/shelter/fee-table");
       setFeeTable(response.data);
+      setOriginalFeeTable(response.data);
     } catch (error: any) {
       console.error("Error fetching fee table:", error);
       showToast("Failed to load fee table", "error");
@@ -73,6 +75,7 @@ export function AdoptionFeeSettings() {
     try {
       setSaving(true);
       await api.put("/shelter/fee-table", feeTable);
+      setOriginalFeeTable(feeTable);
       showToast("Adoption fee table updated successfully!", "success");
     } catch (error: any) {
       console.error("Error saving fee table:", error);
@@ -81,6 +84,8 @@ export function AdoptionFeeSettings() {
       setSaving(false);
     }
   };
+
+  const isChanged = originalFeeTable ? JSON.stringify(feeTable) !== JSON.stringify(originalFeeTable) : false;
 
   if (loading) {
     return (
@@ -101,7 +106,7 @@ export function AdoptionFeeSettings() {
           variant="primary"
           icon={saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           onClick={handleSave}
-          disabled={saving}
+          disabled={!isChanged || saving}
         >
           {saving ? "Saving..." : "Save Settings"}
         </Button>

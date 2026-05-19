@@ -47,6 +47,7 @@ router.delete("/:id", requireSuperAdmin, deleteAdmin);
 
 // DASHBOARD STATS
 router.get("/stats", getDashboardStats);
+router.get("/audit-logs", getAuditLogs);
 
 // SHELTER MONITORING
 router.get("/shelters", getAllShelters);

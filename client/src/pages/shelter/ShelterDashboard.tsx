@@ -39,7 +39,6 @@ import { LoadingSpinner } from "../../components/common/LoadingSpinner";
 import { NotificationCenter } from "../../components/common/NotificationCenter";
 import { HamburgerMenu } from "../../components/layout/HamburgerMenu";
 import { PriorityAlertsPanel } from "../../components/common/PriorityAlertsPanel";
-import { QuickActionsBar } from "../../components/common/QuickActionsBar";
 import { useAuth } from "../../contexts/AuthContext";
 import { PetDistributionChart } from "../../components/charts/PetDistributionChart";
 import { AdoptionTrendsChart } from "../../components/charts/AdoptionTrendsChart";
@@ -228,6 +227,12 @@ export function ShelterDashboard() {
       reviewing: { variant: "info", label: "Reviewing" },
       approved: { variant: "success", label: "Approved" },
       rejected: { variant: "neutral", label: "Rejected" },
+      // Meet & Greet
+      availability_submitted: { variant: "warning", label: "M&G Pending" },
+      meeting_scheduled: { variant: "info", label: "M&G Scheduled" },
+      meeting_completed: { variant: "success", label: "M&G Done" },
+      follow_up_required: { variant: "warning", label: "Follow-up" },
+      follow_up_scheduled: { variant: "info", label: "Follow-up Sched." },
       // Finalization Pipeline
       finalization_pending: { variant: "info", label: "Setting Fee" },
       payment_pending: { variant: "warning", label: "Payment Due" },
@@ -492,11 +497,6 @@ export function ShelterDashboard() {
               </motion.div>
             </div>
 
-            {/* ── 3. QUICK ACTIONS ────────────────────────────────────────── */}
-            <div>
-              <QuickActionsBar />
-            </div>
-
             {/* ── 4. PRIORITY ALERTS ─────────────────────────────────────── */}
             {analyticsData?.priorityAlerts && (
               <PriorityAlertsPanel alerts={analyticsData.priorityAlerts} />
@@ -649,6 +649,12 @@ export function ShelterDashboard() {
                                 Pending {daysSince} days — needs review
                               </div>
                             )}
+                            {app.status === "availability_submitted" && (
+                              <div className="flex items-center gap-1.5 text-xs text-red-600 font-medium mb-2 bg-red-100 rounded-lg px-2 py-1">
+                                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse inline-block" />
+                                Meet &amp; Greet — availability received, schedule now
+                              </div>
+                            )}
                             <div className="flex items-center gap-3 mb-3">
                               <div
                                 className={`w-9 h-9 rounded-xl flex items-center justify-center ${
@@ -768,7 +774,12 @@ export function ShelterDashboard() {
                                     )}
                                   </td>
                                   <td className="py-3 px-4">
-                                    <Badge variant={statusConfig.variant}>{statusConfig.label}</Badge>
+                                    <div className="flex items-center gap-1.5">
+                                      {app.status === "availability_submitted" && (
+                                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse flex-shrink-0" title="Meet & Greet: availability received" />
+                                      )}
+                                      <Badge variant={statusConfig.variant}>{statusConfig.label}</Badge>
+                                    </div>
                                   </td>
                                   <td className="py-3 px-4 text-right">
                                     <div className="flex items-center justify-end gap-1">

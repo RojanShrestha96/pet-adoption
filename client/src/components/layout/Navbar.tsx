@@ -142,6 +142,16 @@ export function Navbar() {
             >
               Donate
             </Link>
+            <Link
+              to="/adoption-guide"
+              className={`text-sm font-medium transition-colors ${
+                isActive("/adoption-guide")
+                  ? "text-[var(--color-primary)]"
+                  : "text-[var(--color-text)] hover:text-[var(--color-primary)]"
+              }`}
+            >
+              Adoption Guide
+            </Link>
           </div>
 
           <div className="flex items-center gap-3">

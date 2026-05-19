@@ -4,6 +4,7 @@ import Notification from "../models/Notification.js";
 import AdoptionApplication from "../models/AdoptionApplication.js";
 import AdopterProfile from "../models/AdopterProfile.js";
 import { notifyAllAdmins } from "./notificationController.js";
+import { logAdminAction } from "../utils/auditLogger.js";
 import { calculateCompatibility } from "./compatibilityController.js";
 import { generateAdopterInsights } from "../services/aiService.js";
 
@@ -408,6 +409,14 @@ export const reviewPet = async (req, res) => {
       message: `Pet ${action}d successfully`, 
       pet 
     });
+
+    await logAdminAction(
+      adminId,
+      action === 'approve' ? 'APPROVE_PET' : 'REJECT_PET',
+      `Pet: ${pet.name}`,
+      `${action.toUpperCase()}D pet submission${notes ? `. Notes: ${notes}` : ''}`,
+      action === 'approve' ? 'success' : 'warning'
+    );
   } catch (error) {
     console.error("Error reviewing pet:", error);
     res.status(500).json({ message: "Failed to review pet" });

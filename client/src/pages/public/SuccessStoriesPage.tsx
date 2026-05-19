@@ -3,7 +3,7 @@ import { HeartIcon, PawPrintIcon, QuoteIcon, Building2, Users } from "lucide-rea
 import { Navbar } from "../../components/layout/Navbar";
 import { Footer } from "../../components/layout/Footer";
 import { Button } from "../../components/ui/Button";
-import { successStories as staticStories } from "../../data/successStories";
+
 import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import axios from "axios";

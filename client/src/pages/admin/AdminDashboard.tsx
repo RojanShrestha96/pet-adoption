@@ -92,6 +92,9 @@ export function AdminDashboard() {
   const [petModerationFilter, setPetModerationFilter] = useState<PetFilterType>('all');
   const [selectedModerationPet, setSelectedModerationPet] = useState<any>(null);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [logSearchQuery, setLogSearchQuery] = useState("");
+  const [logTypeFilter, setLogTypeFilter] = useState("all");
+  const [showLogFilters, setShowLogFilters] = useState(false);
 
   // Platform Users States
   const [platformUsers, setPlatformUsers] = useState<any[]>([]);
@@ -725,7 +728,7 @@ export function AdminDashboard() {
               <tr>
                 <th className="text-left py-4 px-4 text-xs font-semibold text-gray-500 uppercase">User</th>
                 <th className="text-left py-4 px-4 text-xs font-semibold text-gray-500 uppercase">Contact</th>
-                <th className="text-center py-4 px-4 text-xs font-semibold text-gray-500 uppercase">Apps</th>
+                <th className="text-center py-4 px-4 text-xs font-semibold text-gray-500 uppercase">Applications</th>
                 <th className="text-center py-4 px-4 text-xs font-semibold text-gray-500 uppercase">Donated</th>
                 <th className="text-left py-4 px-4 text-xs font-semibold text-gray-500 uppercase">Status</th>
                 <th className="text-right py-4 px-4 text-xs font-semibold text-gray-500 uppercase">Actions</th>
@@ -1122,72 +1125,121 @@ export function AdminDashboard() {
 
   const renderDonations = () => <AdminDonations />;
 
-  const renderAuditLogs = () => (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-         <div>
-            <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                Audit Logs
-                <div className="group relative">
-                    <Info className="w-4 h-4 text-gray-400 cursor-help" />
-                    <div className="absolute left-0 bottom-full mb-2 w-64 p-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                        Audit logs track all critical actions taken within the admin panel for security and accountability.
-                    </div>
-                </div>
-            </h2>
-            <p className="text-sm text-gray-500 mt-1">
-                Track system activities and administrator actions
-            </p>
-         </div>
-         <Button variant="outline" icon={<Filter className="w-4 h-4" />}>Filter</Button>
-      </div>
+  const renderAuditLogs = () => {
+    const filteredLogs = auditLogs.filter(log => {
+      const matchesSearch = !logSearchQuery ||
+        log.adminName?.toLowerCase().includes(logSearchQuery.toLowerCase()) ||
+        log.action?.toLowerCase().includes(logSearchQuery.toLowerCase()) ||
+        log.target?.toLowerCase().includes(logSearchQuery.toLowerCase()) ||
+        log.details?.toLowerCase().includes(logSearchQuery.toLowerCase());
 
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-500">Timestamp</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-500">Admin</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-500">Action</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-500">Target</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-500">Details</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                    {auditLogs.map((log, i) => (
-                        <tr key={log._id || i} className="hover:bg-gray-50">
-                            <td className="py-3 px-4 text-gray-500 whitespace-nowrap">
-                              {new Date(log.createdAt).toLocaleString()}
-                            </td>
-                            <td className="py-3 px-4 font-medium text-gray-900">{log.adminName}</td>
-                            <td className="py-3 px-4">
-                                <Badge variant={
-                                  log.type === 'danger' ? 'error' : 
-                                  log.type === 'success' ? 'success' : 
-                                  log.type === 'warning' ? 'warning' :
-                                  'neutral'
-                                }>
-                                    {log.action}
-                                </Badge>
-                            </td>
-                            <td className="py-3 px-4 text-gray-600">{log.target}</td>
-                            <td className="py-3 px-4 text-gray-500">{log.details}</td>
-                        </tr>
-                    ))}
-                    {auditLogs.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="py-10 text-center text-gray-500">
-                          No audit logs found.
-                        </td>
-                      </tr>
-                    )}
-                </tbody>
-            </table>
+      const matchesType = logTypeFilter === 'all' || 
+        log.type === logTypeFilter || 
+        (logTypeFilter === 'info' && (log.type === 'info' || log.type === 'system' || !log.type));
+
+      return matchesSearch && matchesType;
+    });
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+           <div>
+              <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                  Audit Logs
+                  <div className="group relative">
+                      <Info className="w-4 h-4 text-gray-400 cursor-help" />
+                      <div className="absolute left-0 bottom-full mb-2 w-64 p-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                          Audit logs track all critical actions taken within the admin panel for security and accountability.
+                      </div>
+                  </div>
+              </h2>
+              <p className="text-sm text-gray-500 mt-1">
+                  Track system activities and administrator actions
+              </p>
+           </div>
+           <Button 
+             variant={showLogFilters ? "primary" : "outline"} 
+             icon={<Filter className="w-4 h-4" />}
+             onClick={() => setShowLogFilters(!showLogFilters)}
+           >
+             Filter
+           </Button>
         </div>
-      </Card>
-    </div>
-  );
+
+        {showLogFilters && (
+          <div className="flex flex-col sm:flex-row gap-4 bg-gray-50 p-4 rounded-xl border border-gray-200">
+            <div className="flex-1">
+              <Input
+                placeholder="Search logs by action, admin, target, or details..."
+                icon={<Search className="w-5 h-5 text-gray-400" />}
+                value={logSearchQuery}
+                onChange={(e) => setLogSearchQuery(e.target.value)}
+                fullWidth
+              />
+            </div>
+            <div className="flex bg-gray-200 p-1 rounded-xl w-full sm:w-auto overflow-x-auto">
+              {['all', 'info', 'success', 'warning', 'danger'].map(type => (
+                <button
+                  key={type}
+                  onClick={() => setLogTypeFilter(type)}
+                  className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-medium transition-all capitalize whitespace-nowrap ${
+                    logTypeFilter === type ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {type === 'danger' ? 'danger' : type === 'info' ? 'info/system' : type}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                          <th className="text-left py-3 px-4 font-semibold text-gray-500">Timestamp</th>
+                          <th className="text-left py-3 px-4 font-semibold text-gray-500">Admin</th>
+                          <th className="text-left py-3 px-4 font-semibold text-gray-500">Action</th>
+                          <th className="text-left py-3 px-4 font-semibold text-gray-500">Target</th>
+                          <th className="text-left py-3 px-4 font-semibold text-gray-500">Details</th>
+                      </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                      {filteredLogs.map((log, i) => (
+                          <tr key={log._id || i} className="hover:bg-gray-50">
+                              <td className="py-3 px-4 text-gray-500 whitespace-nowrap">
+                                {new Date(log.createdAt).toLocaleString()}
+                              </td>
+                              <td className="py-3 px-4 font-medium text-gray-900">{log.adminName}</td>
+                              <td className="py-3 px-4">
+                                  <Badge variant={
+                                    log.type === 'danger' ? 'error' : 
+                                    log.type === 'success' ? 'success' : 
+                                    log.type === 'warning' ? 'warning' :
+                                    'neutral'
+                                  }>
+                                      {log.action}
+                                  </Badge>
+                              </td>
+                              <td className="py-3 px-4 text-gray-600">{log.target}</td>
+                              <td className="py-3 px-4 text-gray-500">{log.details}</td>
+                          </tr>
+                      ))}
+                      {filteredLogs.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="py-10 text-center text-gray-500">
+                            No audit logs found.
+                          </td>
+                        </tr>
+                      )}
+                  </tbody>
+              </table>
+          </div>
+        </Card>
+      </div>
+    );
+  };
 
 
   const renderSettings = () => (
@@ -1232,6 +1284,7 @@ export function AdminDashboard() {
                     variant="primary" 
                     type="submit"
                     style={{ background: "linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)" }}
+                    disabled={settingsForm.name === (user?.name || "") && settingsForm.email === (user?.email || "")}
                 >
                     Save Changes
                 </Button>
@@ -1271,7 +1324,12 @@ export function AdminDashboard() {
                     fullWidth
                 />
                 <div className="pt-2">
-                    <Button variant="outline" type="submit" className="w-full">
+                    <Button 
+                      variant="outline" 
+                      type="submit" 
+                      className="w-full"
+                      disabled={!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword}
+                    >
                         Update Password
                     </Button>
                 </div>
@@ -1411,7 +1469,7 @@ export function AdminDashboard() {
                         <div className="flex justify-between items-center p-4 bg-white border border-gray-100 rounded-xl shadow-sm">
                             <div className="flex items-center gap-3">
                               <div className="p-2 bg-blue-50 rounded-lg text-blue-600"><FileText className="w-5 h-5"/></div>
-                              <span className="font-medium text-gray-700">Adoption Apps Sent</span>
+                              <span className="font-medium text-gray-700">Adoption Applications Sent</span>
                             </div>
                             <span className="text-xl font-bold text-gray-900">{selectedPlatformUser.user?.applicationsSent?.length || 0}</span>
                         </div>

@@ -20,7 +20,6 @@ import {
 import { PawAdoptSection } from "../../components/layout/PawAdoptSection";
 import { mockPets } from "../../data/mockData";
 import axios from "axios";
-import { successStories } from "../../data/successStories";
 import { useAuth } from "../../contexts/AuthContext";
 import { formatAge } from "../../utils/ageUtils";
 

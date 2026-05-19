@@ -248,10 +248,33 @@ export function EditPetPage() {
   const handleDocumentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newFiles = Array.from(e.target.files);
-      setFormData((prev) => ({
-        ...prev,
-        medicalDocuments: [...prev.medicalDocuments, ...newFiles],
-      }));
+      const validFiles: File[] = [];
+      const allowedTypes = [
+        'application/pdf',
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'image/webp'
+      ];
+
+      newFiles.forEach(file => {
+        if (allowedTypes.includes(file.type)) {
+          if (file.size <= 10 * 1024 * 1024) { // 10MB limit
+             validFiles.push(file);
+          } else {
+             showToast(`File ${file.name} is too large (max 10MB)`, "error");
+          }
+        } else {
+          showToast(`File ${file.name} format not supported. Use PDF or Images (PNG, JPG).`, "error");
+        }
+      });
+
+      if (validFiles.length > 0) {
+        setFormData((prev) => ({
+          ...prev,
+          medicalDocuments: [...prev.medicalDocuments, ...validFiles],
+        }));
+      }
     }
   };
 
@@ -293,7 +316,75 @@ export function EditPetPage() {
     }
   };
 
+  const validatePhysicalFields = (): boolean => {
+    const years = Number(formData.ageYears) || 0;
+    const months = Number(formData.ageMonths) || 0;
+    const species = formData.species ? formData.species.toLowerCase() : "";
+
+    // Age validations
+    if (years < 0) {
+      showToast("Age years cannot be negative.", "error");
+      return false;
+    }
+    if (months < 0) {
+      showToast("Age months cannot be negative.", "error");
+      return false;
+    }
+    if (months > 11) {
+      showToast("Months must be between 0 and 11. 12 months should be entered as 1 year.", "error");
+      return false;
+    }
+
+    if (species === "dog") {
+      if (years > 20 || (years === 20 && months > 0)) {
+        showToast("A dog's age cannot exceed 20 years.", "error");
+        return false;
+      }
+    } else if (species === "cat") {
+      if (years > 25 || (years === 25 && months > 0)) {
+        showToast("A cat's age cannot exceed 25 years.", "error");
+        return false;
+      }
+    } else { // other
+      if (years > 50 || (years === 50 && months > 0)) {
+        showToast("Pet's age cannot exceed 50 years.", "error");
+        return false;
+      }
+    }
+
+    // Weight validations
+    if (formData.weight) {
+      const weightVal = parseFloat(formData.weight.replace(/[^0-9.]/g, ''));
+      if (isNaN(weightVal)) {
+        showToast("Please enter a valid numeric value for weight.", "error");
+        return false;
+      }
+      if (weightVal < 0) {
+        showToast("Weight cannot be negative.", "error");
+        return false;
+      }
+      if (species === "dog" && weightVal > 100) {
+        showToast("A dog's weight cannot exceed 100 kg.", "error");
+        return false;
+      }
+      if (species === "cat" && weightVal > 20) {
+        showToast("A cat's weight cannot exceed 20 kg.", "error");
+        return false;
+      }
+      if (species !== "dog" && species !== "cat" && weightVal > 150) {
+        showToast("Pet's weight cannot exceed 150 kg.", "error");
+        return false;
+      }
+    }
+    return true;
+  };
+
   const handleNext = () => {
+    if (currentStep === 3) {
+      if (!validatePhysicalFields()) {
+        return;
+      }
+    }
     if (currentStep < STEPS.length) {
       setCurrentStep((prev) => prev + 1);
     }
@@ -306,6 +397,9 @@ export function EditPetPage() {
   };
 
   const handleSubmit = async () => {
+    if (!validatePhysicalFields()) {
+      return;
+    }
     setIsSubmitting(true);
 
     try {
@@ -1393,14 +1487,14 @@ export function EditPetPage() {
                             or drag and drop
                           </p>
                           <p className="text-xs text-gray-500 mt-1">
-                            PDF, DOC, or Images (max 10MB each)
+                            PDF or Images (max 10MB each)
                           </p>
                         </div>
                         <input
                           type="file"
                           className="hidden"
                           multiple
-                          accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,image/webp"
+                          accept="application/pdf,image/jpeg,image/png,image/webp"
                           onChange={handleDocumentUpload}
                         />
                       </label>

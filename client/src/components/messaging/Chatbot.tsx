@@ -27,13 +27,78 @@ const quickActions = [{
   id: 'guide',
   icon: HelpCircle,
   label: 'Adoption guidance',
-  response: "Great choice! Here's what you need to know about adoption:\n\n1️⃣ Browse pets and find your match\n2️⃣ Submit an application\n3️⃣ Complete a home visit\n4️⃣ Meet your new friend!\n\nWould you like more details on any step?"
+  response: "Great choice! Here's what you need to know about adoption:\n\n1. Browse pets and find your match\n2. Submit an application\n3. Complete a home visit\n4. Meet your new friend!\n\nWould you like more details on any step?"
 }];
+const responsesDict: Record<string, string[]> = {
+  "application process": [
+    "Our adoption application workflow goes through the following basic stages:\n\n1. **Submitted (Pending)**: Your application is sent to the shelter.\n2. **Under Review (Reviewing)**: The shelter reviews your details.\n3. **Approved (Availability Requested)**: The shelter approves and asks for your free times.\n4. **Meet & Greet**: You meet the pet to see if they're a match.\n5. **Finalization**: You sign the adoption contract and pay the adoption fee.\n6. **Adopted (Completed)**: The pet is officially yours! 🎉"
+  ],
+  "application workflow": [
+    "Our adoption application workflow goes through the following basic stages:\n\n1. **Submitted (Pending)**: Your application is sent to the shelter.\n2. **Under Review (Reviewing)**: The shelter reviews your details.\n3. **Approved (Availability Requested)**: The shelter approves and asks for your free times.\n4. **Meet & Greet**: You meet the pet to see if they're a match.\n5. **Finalization**: You sign the adoption contract and pay the adoption fee.\n6. **Adopted (Completed)**: The pet is officially yours! 🎉"
+  ],
+  find: [
+    "I'd love to help you find a pet! You can go to the Search page using the navbar to look at all dogs, cats, and other pets currently available. 🐕🐈",
+    "Looking for a new furry friend? Head over to the Search page where you can filter pets by location, breed, age, and compatibility score!"
+  ],
+  dog: [
+    "Dogs are wonderful companions! 🐕 You can find all available dogs on our search page. Make sure to check their compatibility score with your profile!",
+    "Are you looking to adopt a dog? We have many energetic pups and gentle senior dogs waiting for a home. Check out the Search page!"
+  ],
+  cat: [
+    "Cats make amazing, independent companions! 🐈 You can filter by species 'Cat' on our Search page to see all of them.",
+    "Looking for a kitty? We have kittens and mature cats ready to purr their way into your heart. Visit the Search page!"
+  ],
+  status: [
+    "You can track your active adoption applications under 'My Applications' or by visiting the Application Tracking page. 📋",
+    "To check on your applications, click on 'My Applications' in the user menu. You will see real-time updates from the shelter!"
+  ],
+  application: [
+    "To adopt a pet, click on the pet's profile card and select 'Adopt Me' to submit an adoption application. 📝",
+    "After submitting an application, the shelter will review it. You can see the status and notes in the 'My Applications' tab."
+  ],
+  process: [
+    "Our adoption application workflow goes through the following basic stages:\n\n1. **Submitted (Pending)**: Your application is sent to the shelter.\n2. **Under Review (Reviewing)**: The shelter reviews your details.\n3. **Approved (Availability Requested)**: The shelter approves and asks for your free times.\n4. **Meet & Greet**: You meet the pet to see if they're a match.\n5. **Finalization**: You sign the adoption contract and pay the adoption fee.\n6. **Adopted (Completed)**: The pet is officially yours! 🎉"
+  ],
+  workflow: [
+    "Our adoption application workflow goes through the following basic stages:\n\n1. **Submitted (Pending)**: Your application is sent to the shelter.\n2. **Under Review (Reviewing)**: The shelter reviews your details.\n3. **Approved (Availability Requested)**: The shelter approves and asks for your free times.\n4. **Meet & Greet**: You meet the pet to see if they're a match.\n5. **Finalization**: You sign the adoption contract and pay the adoption fee.\n6. **Adopted (Completed)**: The pet is officially yours! 🎉"
+  ],
+  step: [
+    "Our adoption application workflow goes through the following basic stages:\n\n1. **Submitted (Pending)**: Your application is sent to the shelter.\n2. **Under Review (Reviewing)**: The shelter reviews your details.\n3. **Approved (Availability Requested)**: The shelter approves and asks for your free times.\n4. **Meet & Greet**: You meet the pet to see if they're a match.\n5. **Finalization**: You sign the adoption contract and pay the adoption fee.\n6. **Adopted (Completed)**: The pet is officially yours! 🎉"
+  ],
+  stage: [
+    "Our adoption application workflow goes through the following basic stages:\n\n1. **Submitted (Pending)**: Your application is sent to the shelter.\n2. **Under Review (Reviewing)**: The shelter reviews your details.\n3. **Approved (Availability Requested)**: The shelter approves and asks for your free times.\n4. **Meet & Greet**: You meet the pet to see if they're a match.\n5. **Finalization**: You sign the adoption contract and pay the adoption fee.\n6. **Adopted (Completed)**: The pet is officially yours! 🎉"
+  ],
+  shelter: [
+    "Shelters list their pets and review applications. You can contact them directly via the messaging feature on the pet's page or inside your application. 📞",
+    "If you want to view registered shelters, you can find their info and location on our public pages!"
+  ],
+  guide: [
+    "Here is our standard adoption process:\n\n1. Select a pet you love\n2. Submit an adoption application\n3. Wait for shelter review and scheduling\n4. Finalize the adoption and fees!\n\nYou can also read our full Adoption Guide on the navigation bar. 📘"
+  ],
+  fee: [
+    "Adoption fees vary by shelter and pet. Some shelters set small fees to cover medical care, vaccinations, and food. You can see details on the finalization screen. 💳"
+  ],
+  contact: [
+    "You can contact our support team or chat with shelters directly! To chat with a shelter, click the 'Message' button on a pet's page. 💬"
+  ],
+  hello: [
+    "Hello! 👋 How can I help you today?",
+    "Hi there! 🐾 Ask me anything about finding pets, tracking applications, or the adoption guide!"
+  ],
+  hi: [
+    "Hello! 👋 How can I help you today?",
+    "Hi there! 🐾 Ask me anything about finding pets, tracking applications, or the adoption guide!"
+  ]
+};
+
 export function Chatbot() {
   const location = useLocation();
-  const isAdminPath = location.pathname.startsWith('/admin') || location.pathname.startsWith('/admin-secure-access');
+  const isExcludedPath = 
+    location.pathname.startsWith('/admin') || 
+    location.pathname.startsWith('/admin-secure-access') ||
+    location.pathname.startsWith('/shelter');
   
-  if (isAdminPath) return null;
+  if (isExcludedPath) return null;
 
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([{
@@ -84,21 +149,35 @@ export function Chatbot() {
   };
   const handleSend = () => {
     if (!inputValue.trim()) return;
+    const text = inputValue.trim();
     const userMessage: Message = {
       id: Date.now().toString(),
       type: 'user',
-      text: inputValue,
+      text,
       timestamp: new Date()
     };
     setMessages(prev => [...prev, userMessage]);
     setInputValue('');
     setIsTyping(true);
     setTimeout(() => {
-      const responses = ['Thanks for your message! Let me help you with that. 🐾', "I understand! Here's what I can tell you...", 'Great question! Many adopters ask about this.', "I'm here to help! Let me find that information for you."];
+      const cleanText = text.toLowerCase();
+      let matchedResponse = "";
+
+      for (const [keyword, replies] of Object.entries(responsesDict)) {
+        if (cleanText.includes(keyword)) {
+          matchedResponse = replies[Math.floor(Math.random() * replies.length)];
+          break;
+        }
+      }
+
+      if (!matchedResponse) {
+        matchedResponse = "I'm not sure I understand. You can ask me about 'finding a pet', 'dogs', 'cats', 'tracking applications', or 'rejections'! 🐾";
+      }
+
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: 'bot',
-        text: responses[Math.floor(Math.random() * responses.length)],
+        text: matchedResponse,
         timestamp: new Date()
       };
       setMessages(prev => [...prev, botMessage]);

@@ -56,6 +56,7 @@ interface Application {
     adoptionStatus: string;
   };
   shelter: {
+    _id: string;
     name: string;
     email: string;
     phone: string;
@@ -124,6 +125,38 @@ export function ApplicationTrackingPage() {
   const [isStatusExpanded, setIsStatusExpanded] = useState(true);
   const [isAiExpanded, setIsAiExpanded] = useState(false);
   const [showMatchLegend, setShowMatchLegend] = useState(false);
+  const [sendingMessage, setSendingMessage] = useState(false);
+
+  const handleMessageShelter = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+    if (!application?.shelter?._id) {
+      showToast("Shelter information is unavailable", "error");
+      return;
+    }
+    try {
+      setSendingMessage(true);
+      const res = await fetch("http://localhost:5000/api/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ recipientId: application.shelter._id }),
+      });
+      if (!res.ok) throw new Error("Failed to start conversation");
+      const conversation = await res.json();
+      navigate(`/messages?conversationId=${conversation._id}`);
+    } catch (err) {
+      console.error(err);
+      showToast("Could not open chat. Try emailing the shelter directly.", "error");
+    } finally {
+      setSendingMessage(false);
+    }
+  };
 
   useEffect(() => {
     const fetchApplication = async () => {
@@ -478,6 +511,7 @@ export function ApplicationTrackingPage() {
                 </Card>
               </motion.div>
             )}
+
 
             {/* AI Compatibility Card */}
             {application.compatibilityScore && (() => {
@@ -1120,10 +1154,12 @@ export function ApplicationTrackingPage() {
 
               <Button
                 variant="primary"
-                icon={<MessageSquare className="w-4 h-4" />}
+                icon={sendingMessage ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
                 className="w-full shadow-lg shadow-[var(--color-primary)]/10"
+                onClick={handleMessageShelter}
+                disabled={sendingMessage}
               >
-                Send Message
+                {sendingMessage ? "Opening Chat..." : "Send Message"}
               </Button>
 
               <div className="mt-4 flex items-center gap-2 px-3 py-2 bg-white/50 rounded-lg border border-gray-100">

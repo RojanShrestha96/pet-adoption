@@ -118,14 +118,6 @@ export function UserProfilePage() {
       setIsUploadingImage(false);
     }
   };
-  const [notifications, setNotifications] = useState({
-    emailUpdates: true,
-    smsAlerts: false,
-    applicationStatus: true,
-    newPets: true,
-    shelterMessages: true,
-    adoptionTips: false,
-  });
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [userDonations, setUserDonations] = useState<any[]>([]);
   const [loadingDonations, setLoadingDonations] = useState(false);
@@ -134,6 +126,8 @@ export function UserProfilePage() {
     newPassword: "",
     confirmPassword: "",
   });
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [visibleDonationsCount, setVisibleDonationsCount] = useState(5);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editMessageText, setEditMessageText] = useState("");
@@ -340,6 +334,7 @@ export function UserProfilePage() {
   };
   const handleSaveProfile = async () => {
     try {
+      setIsSavingProfile(true);
       const response = await axios.put(
         "http://localhost:5000/api/auth/profile",
         {
@@ -366,8 +361,10 @@ export function UserProfilePage() {
     } catch (error) {
       console.error("Failed to update profile:", error);
       showToast("Failed to update profile", "error");
+    } finally {
+      setIsSavingProfile(false);
+      setIsEditing(false);
     }
-    setIsEditing(false);
   };
 
   const handlePasswordChange = async () => {
@@ -382,6 +379,7 @@ export function UserProfilePage() {
     }
 
     try {
+      setIsChangingPassword(true);
       const response = await axios.post(
         "http://localhost:5000/api/auth/change-password",
         {
@@ -407,6 +405,8 @@ export function UserProfilePage() {
         error.response?.data?.message || "Failed to change password",
         "error"
       );
+    } finally {
+      setIsChangingPassword(false);
     }
   };
 
@@ -792,21 +792,25 @@ export function UserProfilePage() {
                     fullWidth
                     disabled={!isEditing}
                   />
-                  <Input
-                    label="Email (Account ID)"
-                    type="email"
-                    value={profileData.email}
-                    onChange={(e) =>
-                      setProfileData({
-                        ...profileData,
-                        email: e.target.value,
-                      })
-                    }
-                    icon={<Mail className="w-5 h-5" />}
-                    fullWidth
-                    disabled={true}
-                    helperText="Email is your unique account identifier and cannot be changed."
-                  />
+                  <div>
+                    <Input
+                      label="Email (Account ID)"
+                      type="email"
+                      value={profileData.email}
+                      onChange={(e) =>
+                        setProfileData({
+                          ...profileData,
+                          email: e.target.value,
+                        })
+                      }
+                      icon={<Mail className="w-5 h-5" />}
+                      fullWidth
+                      disabled={true}
+                    />
+                    <p className="text-xs text-[var(--color-text-light)] mt-1 ml-1">
+                      Email is your unique account identifier and cannot be changed.
+                    </p>
+                  </div>
                   <Input
                     label="Phone"
                     type="tel"
@@ -956,8 +960,9 @@ export function UserProfilePage() {
                     variant="primary"
                     icon={<Save className="w-4 h-4" />}
                     onClick={handleSaveProfile}
+                    disabled={profileData.location === (user?.address || "") || isSavingProfile}
                   >
-                    Save Location
+                    {isSavingProfile ? "Saving Location..." : "Save Location"}
                   </Button>
                 </div>
                 <p className="text-gray-500 mb-6 text-sm">
@@ -1386,106 +1391,6 @@ export function UserProfilePage() {
                       <ThemeSwitcher />
                     </div>
                   </div>
-
-                  {/* Email Notifications */}
-                  <div>
-                    <h4
-                      className="font-semibold mb-4"
-                      style={{
-                        color: "var(--color-text)",
-                      }}
-                    >
-                      Email Notifications
-                    </h4>
-                    <div className="space-y-3">
-                      <ToggleSwitch
-                        checked={notifications.emailUpdates}
-                        onChange={(checked) =>
-                          setNotifications({
-                            ...notifications,
-                            emailUpdates: checked,
-                          })
-                        }
-                        label="Email Updates"
-                        description="Receive general updates and newsletters"
-                      />
-                      <ToggleSwitch
-                        checked={notifications.applicationStatus}
-                        onChange={(checked) =>
-                          setNotifications({
-                            ...notifications,
-                            applicationStatus: checked,
-                          })
-                        }
-                        label="Application Status"
-                        description="Get notified about your adoption application status"
-                      />
-                      <ToggleSwitch
-                        checked={notifications.newPets}
-                        onChange={(checked) =>
-                          setNotifications({
-                            ...notifications,
-                            newPets: checked,
-                          })
-                        }
-                        label="New Pets"
-                        description="Be the first to know when new pets are listed"
-                      />
-                      <ToggleSwitch
-                        checked={notifications.shelterMessages}
-                        onChange={(checked) =>
-                          setNotifications({
-                            ...notifications,
-                            shelterMessages: checked,
-                          })
-                        }
-                        label="Shelter Messages"
-                        description="Receive messages from shelters"
-                      />
-                      <ToggleSwitch
-                        checked={notifications.adoptionTips}
-                        onChange={(checked) =>
-                          setNotifications({
-                            ...notifications,
-                            adoptionTips: checked,
-                          })
-                        }
-                        label="Adoption Tips"
-                        description="Get helpful tips and guides for pet adoption"
-                      />
-                    </div>
-                  </div>
-
-                  {/* SMS Notifications */}
-                  <div>
-                    <h4
-                      className="font-semibold mb-4"
-                      style={{
-                        color: "var(--color-text)",
-                      }}
-                    >
-                      SMS Notifications
-                    </h4>
-                    <div className="space-y-3">
-                      <ToggleSwitch
-                        checked={notifications.smsAlerts}
-                        onChange={(checked) =>
-                          setNotifications({
-                            ...notifications,
-                            smsAlerts: checked,
-                          })
-                        }
-                        label="SMS Alerts"
-                        description="Receive important updates via text message"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="pt-4">
-                    <Button variant="primary" fullWidth>
-                      Save Preferences
-                    </Button>
-                  </div>
                 </div>
               </Card>
             )}
@@ -1552,8 +1457,12 @@ export function UserProfilePage() {
                   />
 
                   <div className="pt-4">
-                    <Button variant="primary" onClick={handlePasswordChange}>
-                      Change Password
+                    <Button
+                      variant="primary"
+                      onClick={handlePasswordChange}
+                      disabled={!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword || isChangingPassword}
+                    >
+                      {isChangingPassword ? "Changing Password..." : "Change Password"}
                     </Button>
                   </div>
                 </div>

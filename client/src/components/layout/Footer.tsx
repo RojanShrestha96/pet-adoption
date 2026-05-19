@@ -57,14 +57,14 @@ export function Footer() {
                 </a>
               </li>
               <li>
-                <a href="#" className="text-sm text-[var(--color-text-light)] hover:text-[var(--color-primary)] transition-colors">
+                <Link to="/adoption-guide" className="text-sm text-[var(--color-text-light)] hover:text-[var(--color-primary)] transition-colors">
                   Adoption Guide
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="#" className="text-sm text-[var(--color-text-light)] hover:text-[var(--color-primary)] transition-colors">
+                <Link to="/faq" className="text-sm text-[var(--color-text-light)] hover:text-[var(--color-primary)] transition-colors">
                   FAQs
-                </a>
+                </Link>
               </li>
               <li>
                 <a href="#" className="text-sm text-[var(--color-text-light)] hover:text-[var(--color-primary)] transition-colors">

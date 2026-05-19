@@ -25,6 +25,7 @@ import AdoptionPayment from "../models/AdoptionPayment.js";
 import AdoptionContract from "../models/AdoptionContract.js";
 import Pet from "../models/Pet.js";
 import Notification from "../models/Notification.js";
+import SuccessStory from "../models/SuccessStory.js";
 
 // PDFKit is CommonJS — use createRequire to import it in an ESM context.
 const require = createRequire(import.meta.url);
@@ -1042,6 +1043,27 @@ export async function confirmHandover(applicationId, shelterId) {
   application.completedAt = new Date();
 
   await application.save();
+
+  // ── 4a. Auto-create Success Story ────────────────────────────────────────
+  try {
+    const defaultStory = `${application.pet.name} has found their forever home with ${application.adopter.name}! We're so happy to have been part of this beautiful journey.`;
+    await SuccessStory.create({
+      application: application._id,
+      pet: application.pet._id,
+      adopter: application.adopter._id,
+      shelter: application.shelter,
+      story: defaultStory,
+      quote: "A forever home found!",
+      petImage: application.pet.images?.[0] || "",
+      ownerImage: application.adopter.profilePicture || "",
+      isFeatured: true,
+      status: "published"
+    });
+    console.log(`[AdoptionFinalization] Success Story auto-created for application ${applicationId}`);
+  } catch (storyErr) {
+    console.error("[AdoptionFinalization] Failed to auto-create success story:", storyErr.message);
+    // Non-blocking error
+  }
 
   // ── 5. Trigger the global adoption event ─────────────────────────────────
   // This marks the pet as adopted and closes all rival applications.

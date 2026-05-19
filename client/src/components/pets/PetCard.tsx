@@ -7,7 +7,6 @@ import { Card } from "../ui/Card";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { FavouriteButton } from "./FavouriteButton";
-import { PetDocBadgeInline } from "./PetDocBadge";
 import type { Pet } from "../../data/mockData";
 import { formatAge } from "../../utils/ageUtils";
 export interface PetCardProps {
@@ -94,12 +93,6 @@ export function PetCard({
                     ? "Partially Vax"
                     : pet.healthStatus}
                 </Badge>
-                <PetDocBadgeInline 
-                  isVaccinated={pet.medical?.isVaccinated}
-                  vaccinationStatus={pet.medical?.vaccinationStatus}
-                  isMicrochipped={pet.medical?.isMicrochipped}
-                  isNeutered={pet.medical?.isNeutered}
-                />
               </div>
             </div>
 
